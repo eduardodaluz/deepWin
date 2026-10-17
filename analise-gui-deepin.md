@@ -26,6 +26,7 @@ integrações; ela não indica que os recursos estejam instalados ou habilitados
 | Janela no próximo monitor | KGlobalAccel, Shift+Win+→ | Adicionar / remover apenas essa combinação |
 | Janela no monitor anterior | KGlobalAccel, Shift+Win+← | Adicionar / remover apenas essa combinação |
 | Captura de área | API de atalhos do Deepin e GSettings, Win+Shift+S | Sincronizar a combinação ativa e a configuração salva |
+| Prévia ao clicar em grupos | Pacote QML de usuário do `dde-shell` | Usar a prévia nativa para duas ou mais janelas; remover o ajuste ao desabilitar |
 | Paisagem automática | `deepin-wallpaper.timer` | Iniciar e habilitar / parar e desabilitar o timer; manter a imagem atual |
 | Comando zclaude | Wrapper do Claude Code para Z.AI | Disponibilizar / guardar o wrapper para desativar o comando |
 
@@ -86,7 +87,7 @@ Os testes unitários cobrem decisões de colagem, atalhos, backups, restauraçã
 migração de estado e movimentação do wrapper. Eles usam adaptadores simulados
 para as configurações do sistema. Os comandos estão no README.
 
-O modo `--smoke-test` consulta os oito recursos sem alterá-los; seu resultado
+O modo `--smoke-test` consulta os nove recursos sem alterá-los; seu resultado
 depende de essas integrações estarem disponíveis na sessão. O teste gráfico
 `tests/verify_configs_gui.py` exige sessão desbloqueada, GUI fechada, colagem
 ativa e nenhum backup pendente. Ele desativa a colagem e usa o diálogo de

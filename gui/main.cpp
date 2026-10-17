@@ -424,7 +424,7 @@ private:
             firstResult = false;
             if (smokeTest || !screenshotPath.isEmpty()) {
                 QTimer::singleShot(600, this, [this, ok] {
-                    bool valid = ok && rows.size() == 8 &&
+                    bool valid = ok && rows.size() == 9 &&
                         claudeChoice->findData("stable") >= 0 && claudeChoice->findData("system") >= 0;
                     for (const auto &row : rows) valid = valid && row.available;
                     if (!screenshotPath.isEmpty()) valid = grab().save(screenshotPath) && valid;

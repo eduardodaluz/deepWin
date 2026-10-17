@@ -91,6 +91,12 @@
             dest: "{{ deepwin_data }}/gui/claude_versions.py"
             mode: '0644'
 
+        - name: Instalar o ajuste nativo de previas do dock
+          ansible.builtin.copy:
+            src: gui/dock_preview.py
+            dest: "{{ deepwin_data }}/gui/dock_preview.py"
+            mode: '0644'
+
         - name: Atualizar o wrapper existente para integrar o seletor
           ansible.builtin.stat:
             path: "{{ deepwin_home }}/.local/bin/zclaude"

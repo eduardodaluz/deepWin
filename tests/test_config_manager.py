@@ -72,9 +72,33 @@ class ManagerTests(unittest.TestCase):
 
     def test_status_reports_real_resources_without_writing_files(self):
         result = self.manager.status()
-        self.assertEqual(len(result['features']), 8)
+        self.assertEqual(len(result['features']), 9)
         self.assertFalse(self.state.exists())
         self.assertFalse(self.manager.feature_status('zclaude')['enabled'])
+
+    def test_dock_preview_is_backed_up_and_restored_independently(self):
+        class FakeDock:
+            enabled = False
+            def capture(self): return {'enabled': self.enabled}
+            def status(self): return {'enabled': self.enabled, 'available': True}
+            def configure(self, enabled): self.enabled = enabled
+        self.manager.dock_preview = FakeDock()
+        self.manager.change('dock_preview', True)
+        self.assertTrue(self.manager.feature_status('dock_preview')['enabled'])
+        self.assertEqual(self.manager.load_state()['dock_preview'], {'enabled': False})
+        self.manager.restore('dock_preview')
+        self.assertFalse(self.manager.feature_status('dock_preview')['enabled'])
+        self.assertEqual(self.manager.load_state(), {})
+
+    def test_failed_dock_activation_restores_prior_state_and_clears_new_backup(self):
+        class FakeDock:
+            def capture(self): return {'enabled': False}
+            def configure(self, enabled):
+                if enabled: raise backend.ConfigError('Falha ao recarregar')
+        self.manager.dock_preview = FakeDock()
+        with self.assertRaises(backend.ConfigError):
+            self.manager.change('dock_preview', True)
+        self.assertEqual(self.manager.load_state(), {})
 
     def test_shortcut_disable_preserves_other_combinations(self):
         self.manager.change('desktop_next', False)

@@ -17,6 +17,7 @@ import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from claude_versions import ClaudeVersions
+from dock_preview import DockPreview
 
 
 SCREENSHOT_ID = 'org.deepin.dde.keybinding.shortcut.app.screenshot'
@@ -40,6 +41,8 @@ FEATURES = [
     ('screen_previous', 'Atalhos', 'Janela no monitor anterior', 'Shift + Win + ←'),
     ('screen_next', 'Atalhos', 'Janela no próximo monitor', 'Shift + Win + →'),
     ('screenshot', 'Atalhos', 'Capturar uma área da tela', 'Win + Shift + S · Recorte e edição do Deepin.'),
+    ('dock_preview', 'Aparência', 'Miniaturas ao clicar em grupos de janelas',
+     'Clique em um ícone com duas ou mais janelas para escolher uma miniatura. Recarrega a barra de tarefas.'),
     ('wallpaper', 'Aparência', 'Baixar novas paisagens automaticamente',
      'Busca imagens no Unsplash conforme o timer configurado. Ao desativar, mantém a imagem atual.'),
     ('zclaude', 'Ferramentas', 'Disponibilizar o comando zclaude',
@@ -213,6 +216,7 @@ class Manager:
         self.disabled = self.state_dir / 'disabled/zclaude'
         self.state_file = self.state_dir / 'originals.json'
         self.native = native if native is not None else Native()
+        self.dock_preview = DockPreview(home=self.home)
 
     def load_state(self):
         if not self.state_file.exists():
@@ -238,6 +242,8 @@ class Manager:
             yield
 
     def capture(self, feature):
+        if feature == 'dock_preview':
+            return self.dock_preview.capture()
         if feature in SERVICES:
             return self.native.service(SERVICES[feature])
         if feature in SHORTCUTS:
@@ -254,6 +260,9 @@ class Manager:
         raise ConfigError('Recurso desconhecido.')
 
     def restore_value(self, feature, value):
+        if feature == 'dock_preview':
+            self.dock_preview.configure(value['enabled'])
+            return
         if feature in SERVICES:
             self.native.set_service(SERVICES[feature], value['active'], value['enabled'])
         elif feature in SHORTCUTS:
@@ -272,6 +281,9 @@ class Manager:
                 atomic_bytes(self.wrapper, base64.b64decode(value['data']), value['mode'])
 
     def apply(self, feature, enabled):
+        if feature == 'dock_preview':
+            self.dock_preview.configure(enabled)
+            return
         if feature in SERVICES:
             self.native.set_service(SERVICES[feature], enabled,
                                     'enabled' if enabled else 'disabled')
@@ -364,6 +376,10 @@ class Manager:
                     item['status'] = 'Ativo em simulação · Não envia colagem'
                 if feature == 'wallpaper' and self.native.native_slideshow():
                     item['note'] = 'A rotação de imagens do Deepin também está ativa e é independente deste download.'
+            elif feature == 'dock_preview':
+                values = self.dock_preview.status()
+                item.update(values)
+                item['status'] = 'Prévia ao clicar ativada' if values['enabled'] else 'Comportamento padrão do dock'
             elif feature in SHORTCUTS:
                 action, key = SHORTCUTS[feature]
                 item['enabled'] = key in self.native.shortcut(action)

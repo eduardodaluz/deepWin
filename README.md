@@ -9,11 +9,12 @@ em [analise-gui-deepin.md](analise-gui-deepin.md).
 O comando de abertura é `deepwin` e o identificador do aplicativo/pacote é
 `devedu.deepin-configs`. A entrada no menu usa `devedu.deepin-configs.desktop`.
 
-Ele permite habilitar e desabilitar oito recursos:
+Ele permite habilitar e desabilitar nove recursos:
 
 - Colagem ao confirmar um item do histórico.
 - Quatro combinações para áreas de trabalho e monitores.
 - Captura de área com Win+Shift+S.
+- Miniaturas ao clicar em um grupo de janelas na barra de tarefas.
 - Download automático de paisagens.
 - Disponibilidade do comando `zclaude`.
 
@@ -67,6 +68,7 @@ indisponíveis. Para preparar cada integração:
 | --- | --- |
 | Colagem automática | Aplicar `deepin-clipboard.yml`; por padrão, inicia em simulação, sem colar. |
 | Atalhos | Usar uma sessão com KGlobalAccel e as APIs de atalhos do Deepin; `deepin-shortcuts.yml` aplica as combinações sugeridas. |
+| Miniaturas ao clicar | Requer o dock do `dde-shell` com QML compatível. O controle fica em Aparência e é instalado com a GUI. |
 | Download agendado de paisagens | Requer `deepin-wallpaper.timer` e seu serviço no systemd do usuário. O repositório ainda não fornece a instalação dessas unidades; `deepin-wallpaper.yml` apenas troca a imagem uma vez. |
 | `zclaude` | Instalar o Claude Code e configurar a chave da Z.AI para usar o wrapper; `zclaude.yml` instala o comando. |
 
@@ -95,7 +97,7 @@ PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -m unittest discover -s tests -v
 ```
 
 Os testes unitários usam simulações. O `--smoke-test` exige a interface
-compilada, uma sessão gráfica e as oito integrações disponíveis; um recurso
+compilada, uma sessão gráfica e as nove integrações disponíveis; um recurso
 ausente faz essa verificação falhar, mesmo que a janela abra normalmente.
 
 Com a sessão desbloqueada, a GUI fechada, sem alterações pendentes no painel
@@ -267,6 +269,41 @@ Para diagnóstico interativo, também com o serviço parado:
 ```bash
 ./bin/deepin-clipboard-autopaste --dry-run --diagnose
 ```
+
+## Miniaturas ao clicar no ícone de um aplicativo
+
+Em **Aparência → Miniaturas ao clicar em grupos de janelas**, habilite o recurso
+para abrir a prévia nativa ao clicar em um ícone com duas ou mais janelas. A
+janela de destino só é ativada depois de clicar em uma miniatura. Com uma única
+janela, o dock mantém sua ação normal; o botão direito e a prévia ao passar o
+mouse também mantêm o comportamento nativo.
+
+A mudança recarrega o `dde-shell`, incluindo a barra de tarefas. Os aplicativos
+abertos permanecem em execução. Desativar o switch ou usar **Restaurar alterações**
+retorna ao comportamento anterior.
+
+O DeepWin gera uma cópia personalizada do componente nativo em
+`$XDG_DATA_HOME/dde-shell/org.deepin.ds.dock.taskmanager/`
+(por padrão, `~/.local/share/dde-shell/org.deepin.ds.dock.taskmanager/`). Os
+arquivos de `/usr/share/dde-shell` são preservados. Uma personalização local
+preexistente ou arquivos alterados manualmente são protegidos contra sobrescrita.
+
+Um drop-in de usuário do serviço `dde-shell@DDE.service` atualiza essa cópia
+antes de iniciar o shell após atualizações. Se o código nativo deixar de ser
+compatível, o ajuste é suspenso e o pacote original volta a ser carregado.
+O helper e o ajuste continuam disponíveis se apenas a GUI for removida.
+A implementação e a compatibilidade estão descritas em
+[analise-dock-deepin.md](analise-dock-deepin.md).
+
+Para verificar com janelas descartáveis, com o recurso inicialmente desativado,
+GTK 3 disponível e a sessão X11 desbloqueada:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 tests/verify_dock_preview.py
+```
+
+O teste recarrega a barra, verifica o clique e a escolha de uma miniatura e
+restaura o estado anterior automaticamente.
 
 ## Papel de parede de paisagem
 

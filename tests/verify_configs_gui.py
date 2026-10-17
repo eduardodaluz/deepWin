@@ -55,7 +55,7 @@ def main():
         wait_for(lambda: not manager.feature_status('clipboard')['enabled'])
         assert 'clipboard' in manager.load_state()
         print('PASS switch DTK desativa a colagem e preserva o estado original', flush=True)
-        # O serviço muda antes de o controlador devolver os oito estados à GUI.
+        # O serviço muda antes de o controlador devolver os estados à GUI.
         # Aguardar a reabilitação dos botões antes de clicar em Restaurar.
         time.sleep(0.7)
         xdo('mousemove', '--window', window, width - 130, height - 32, 'click', 1)
