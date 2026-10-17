@@ -1,79 +1,79 @@
-# DeepWin: GUI nativa para as configurações pessoais
+# DeepWin: arquitetura da interface nativa
 
-## Análise antes da implementação — 17/10/2026
+## SDK e compilação
 
-O SDK visual solicitado é o DTK do Deepin. O sistema tem os runtimes DTK 6 e
-Qt 6, mas não os headers de desenvolvimento. A implementação escolhida é
-C++ com DTK Widgets (`DApplication`, `DMainWindow`, `DSwitchButton` e os
-componentes de diálogo e layout do Deepin). Isso usa o SDK e o tema nativos.
-Os headers podem ser extraídos dos pacotes oficiais para um diretório de build
-local, sem instalar ou atualizar bibliotecas do sistema.
+A interface usa C++ com DTK 6 Widgets (`DApplication`, `DMainWindow`,
+`DSwitchButton` e os componentes de diálogo e layout do Deepin), com integração
+ao tema nativo. O controlador de configurações é separado da janela e usa
+Python/D-Bus.
 
-DTK Declarative/QML também está presente, mas seus launchers de desenvolvimento
-não estão disponíveis. Para este painel de configurações, DTK Widgets oferece
-uma integração direta com as bibliotecas instaladas e não exige um runtime web
-nem bindings Python/Qt adicionais.
+A escolha de DTK Widgets permite usar os componentes de desktop do Deepin sem
+um runtime web ou bindings Python/Qt. A compilação requer os headers DTK/Qt e
+os runtimes compatíveis. O script `bin/build-deepwin` usa o SDK instalado ou
+extrai headers de pacotes oficiais para um cache local, sem instalar ou
+atualizar bibliotecas do sistema.
 
-## Inventário e comportamento dos controles
+## Recursos e controles
 
-| Recurso | Estado observado | Habilitar / desabilitar |
+Os estados são consultados na sessão do usuário. A lista abaixo descreve as
+integrações; ela não indica que os recursos estejam instalados ou habilitados.
+
+| Recurso | Integração | Habilitar / desabilitar |
 | --- | --- | --- |
-| Colar ao confirmar no histórico | Serviço ativo e habilitado | Iniciar e habilitar / parar e desabilitar o serviço do usuário |
-| Próxima área de trabalho | Ctrl+Win+→ | Adicionar / remover apenas esse acelerador pela API KGlobalAccel |
-| Área de trabalho anterior | Ctrl+Win+← | Adicionar / remover apenas esse acelerador pela API KGlobalAccel |
-| Janela no próximo monitor | Shift+Win+→ | Adicionar / remover apenas esse acelerador pela API KGlobalAccel |
-| Janela no monitor anterior | Shift+Win+← | Adicionar / remover apenas esse acelerador pela API KGlobalAccel |
-| Captura de área | Win+Shift+S | Sincronizar o acelerador no daemon do Deepin e no GSettings |
-| Paisagem automática | Timer do usuário ativo e habilitado, a cada hora | Iniciar e habilitar / parar e desabilitar o timer; manter a imagem atual |
-| Comando zclaude | Wrapper instalado e executável | Disponibilizar / guardar o wrapper para desativar o comando |
+| Colar ao confirmar no histórico | `deepin-clipboard-autopaste.service` | Iniciar e habilitar / parar e desabilitar o serviço do usuário |
+| Próxima área de trabalho | KGlobalAccel, Ctrl+Win+→ | Adicionar / remover apenas essa combinação |
+| Área de trabalho anterior | KGlobalAccel, Ctrl+Win+← | Adicionar / remover apenas essa combinação |
+| Janela no próximo monitor | KGlobalAccel, Shift+Win+→ | Adicionar / remover apenas essa combinação |
+| Janela no monitor anterior | KGlobalAccel, Shift+Win+← | Adicionar / remover apenas essa combinação |
+| Captura de área | API de atalhos do Deepin e GSettings, Win+Shift+S | Sincronizar a combinação ativa e a configuração salva |
+| Paisagem automática | `deepin-wallpaper.timer` | Iniciar e habilitar / parar e desabilitar o timer; manter a imagem atual |
+| Comando zclaude | Wrapper do Claude Code para Z.AI | Disponibilizar / guardar o wrapper para desativar o comando |
 
-O `zclaude` é um comando opcional, não uma configuração global do Claude.
-O controle representa a disponibilidade desse comando. A chave de API não
-precisa ser lida, exibida, alterada ou apagada pelo painel.
+O `zclaude` é opcional. Seu controle representa a disponibilidade do comando;
+a chave de API não precisa ser lida, exibida, alterada ou apagada pelo painel.
 
-A rotação de imagens do Deepin também está ativa. Ela é independente do timer
-de download do Unsplash. O painel informa essa diferença na seção Aparência e
-limita seu switch ao download configurado neste workspace.
+A rotação nativa de imagens do Deepin e o timer de download são independentes.
+Quando a rotação nativa está ativa, o painel apresenta uma observação na seção
+Aparência. O switch controla somente o timer de download. A frequência depende
+da configuração desse timer; as unidades precisam existir previamente, pois o
+playbook de papel de parede faz apenas uma troca de imagem por chamada.
 
-O backup antigo `kglobalshortcutsrc.before-deepin-shortcuts` não está presente.
-Por isso, desativar um atalho significa remover somente a combinação listada,
-preservando outras atribuições da mesma ação. O painel não deve inventar um
-estado anterior nem reescrever todo o arquivo de atalhos.
+Desativar um atalho remove somente a combinação listada, preservando outras
+atribuições da mesma ação. A restauração usa o estado capturado pelo painel
+antes da primeira alteração; ela não pressupõe a existência de um backup antigo
+do arquivo de atalhos.
 
 ## Integração e reversão
 
-- Usar as APIs nativas de KGlobalAccel e do daemon de atalhos do Deepin.
-  A aplicação dos atalhos pode ser imediata, sem reiniciar o KWin ou a sessão.
-- Usar systemd `--user` para os serviços já instalados, sem permissões de root.
-- Ler o estado real a cada atualização; não apresentar preferências fictícias.
-- Guardar o estado original de cada recurso antes de sua primeira alteração
-  pelo painel. Permitir restaurar essas alterações individualmente no backend
-  e em conjunto pela interface.
-- Separar a GUI DTK do controlador de configurações. A GUI usa QProcess
-  assíncrono; o controlador usa Python/D-Bus, já disponíveis no sistema.
-- Preservar atalhos alternativos, conferir conflitos e verificar as alterações.
-- Instalar a GUI como aplicativo do usuário, com entrada no menu do Deepin.
-  Remover a GUI não deve desativar recursos nem apagar backups de restauração.
+- As APIs de KGlobalAccel e do daemon de atalhos do Deepin aplicam os atalhos
+  imediatamente, preservando combinações alternativas e verificando conflitos.
+- Os serviços são controlados pelo systemd do usuário, sem permissões de root.
+- A GUI usa QProcess assíncrono para consultar ou alterar configurações; ela
+  não instala um serviço permanente.
+- O estado original de cada recurso é guardado antes da primeira alteração
+  pelo painel. O backend permite restaurar um recurso; a interface permite
+  restaurar o conjunto de alterações.
+- Remover a GUI preserva os recursos e os backups de restauração.
 
-## Validação realizada
+A API de captura é desativada com `Disable` quando não há combinação. A consulta
+confere a associação real para ignorar rótulos traduzidos de atalho ausente.
+Ao guardar ou recuperar o wrapper, o controlador preserva conteúdo, permissões
+e links simbólicos, inclusive entre sistemas de arquivos diferentes.
 
-- Compilação contra DTK 6/Qt 6 e verificação das bibliotecas carregadas.
-- 43 testes automatizados, incluindo os testes anteriores da colagem.
-- Desativação e restauração reais dos quatro atalhos KWin, do atalho de captura,
-  do serviço de colagem e do wrapper zclaude.
-- A API de captura não aceita uma lista vazia em ModifyHotkeys. O controlador
-  usa Disable para esse caso e consulta a associação real para ignorar o rótulo
-  traduzido de atalho ausente, independentemente do idioma.
-- A movimentação do wrapper funciona também quando o backup está em outro
-  sistema de arquivos, preservando conteúdo, permissões e links simbólicos.
-- Interface instalada aberta na sessão real; os oito recursos foram consultados.
-- Teste gráfico do switch de colagem e do diálogo DTK de restauração.
-- Estado inicial dos oito recursos confirmado ao final. O timer de paisagens
-  foi testado com adaptador simulado, evitando disparar downloads nos testes.
-- Entrada no menu validada com desktop-file-validate.
+## Verificação
 
-Os testes reais restauraram os valores anteriores em blocos finally, inclusive
-quando uma verificação falhou durante o desenvolvimento.
+Os testes unitários cobrem decisões de colagem, atalhos, backups, restauração,
+migração de estado e movimentação do wrapper. Eles usam adaptadores simulados
+para as configurações do sistema. Os comandos estão no README.
+
+O modo `--smoke-test` consulta os oito recursos sem alterá-los; seu resultado
+depende de essas integrações estarem disponíveis na sessão. O teste gráfico
+`tests/verify_configs_gui.py` exige sessão desbloqueada, GUI fechada, colagem
+ativa e nenhum backup pendente. Ele desativa a colagem e usa o diálogo de
+restauração, preservando o estado original em um bloco `finally`.
+
+A imagem `gui/preview.png` é uma prévia ilustrativa da interface. Os estados
+exibidos nela não representam os valores iniciais de uma nova instalação.
 
 ## Identidade do aplicativo
 

@@ -1,10 +1,8 @@
 # Plano: Enter para selecionar e colar no histórico do Deepin
 
-Status: implementação criada em 16/10/2026. Instalação e validações descritas
-no README. A implementação usa o monitor nativo do Deepin pelo D-Bus e
-libX11/libXfixes via ctypes, dispensando a dependência de python-xlib prevista
-inicialmente. O prazo foi ajustado para 1,5 segundo porque o próprio Deepin
-aplica a seleção após cerca de 500 ms.
+Este documento descreve o fluxo e os critérios de aceitação da implementação.
+As instruções de instalação e uso estão no README. O script usa o monitor nativo
+do Deepin pelo D-Bus e libX11/libXfixes via ctypes, sem depender de python-xlib.
 
 ## Resultado esperado
 
@@ -15,15 +13,18 @@ e executar uma única colagem no aplicativo de origem.
 O Enter continua sendo entregue ao Deepin para realizar a seleção normalmente.
 Escape, fechamento por clique e troca de aplicativo cancelam a colagem pendente.
 
-## Ambiente confirmado
+## Requisitos e compatibilidade
 
-- Deepin 25, sessão X11 e pacote `dde-clipboard` versão `1:6.1.33`.
-- Python 3, `xdotool`, `xprop` e Ansible já instalados.
-- `python-xlib` não é necessário na arquitetura implementada.
-- Não foi encontrada opção de colagem automática nos metadados de configuração
-  instalados do histórico.
-- O diagnóstico e os testes gráficos foram executados na sessão do usuário
-  com acesso fora do sandbox.
+- Sessão X11 do Deepin com `dde-clipboard`, os serviços D-Bus do histórico e
+  `org.deepin.dde.XEventMonitor1` disponíveis.
+- Python 3, `python3-dbus`, `python3-gi`, libX11, libXfixes e `xdotool`.
+- Ansible para instalar pelo playbook; GTK 3 e seus bindings Python para os
+  testes gráficos. `xprop` pode auxiliar no diagnóstico de janelas.
+- A integração toma como referência as APIs do `dde-clipboard` 6.1.33,
+  incluindo o atraso de aproximadamente 500 ms para aplicar a seleção.
+  O prazo padrão da automação é de 1,5 segundo. Outras versões precisam de
+  verificação de compatibilidade; essas referências não fixam a versão do
+  desktop de quem instalar o projeto.
 
 ## 1. Confirmar os eventos antes de implementar
 
@@ -121,20 +122,21 @@ Documentar instalação, consulta de status, parada e desativação. Parar o ser
 deve restaurar imediatamente o comportamento original. Só habilitar o início
 automático depois da validação na sessão real.
 
-## Validação realizada
+## Verificações disponíveis
 
-- 18 testes automatizados das decisões de colagem, cancelamento e escolha
-  do atalho por classe de janela passaram.
-- Teste gráfico com editor GTK: acentos e várias linhas, Enter numérico,
-  mesmo item novamente, item antigo, Escape, troca de janela, Enter fora do
-  histórico e Enter segurado. Quatro colagens autorizadas, sem duplicação.
-- Instalação em simulação e reaplicação idempotente: nenhuma alteração na
-  segunda execução.
-- Rollback executado: serviço parado e arquivos instalados removidos.
-- O serviço recebe DISPLAY e XAUTHORITY da sessão, sem valores fixos.
-- Deepin Terminal, Kitty e Alacritty validados com Win+V e Enter usando Ctrl+Shift+V, com um
-  leitor de bytes temporário que não executa o texto colado.
-- Navegadores, imagens e arquivos continuam dependendo de validação específica.
+- Testes unitários das decisões de colagem, cancelamento e escolha do atalho
+  por classe de janela, sem modificar a sessão gráfica.
+- Teste gráfico com editor GTK para texto com acentos, várias linhas, Enter
+  principal e numérico, seleção repetida, Escape e troca de janela.
+- Teste de terminal para Deepin Terminal, Kitty ou Alacritty, usando um leitor
+  de bytes temporário que não executa o texto colado.
+- Instalação em simulação para verificar os eventos antes de ativar a colagem.
+- Rollback pelo playbook para parar o serviço e remover seus arquivos.
+
+Execute os testes gráficos em uma sessão desbloqueada e confira os requisitos
+de cada comando no README. Navegadores, imagens, arquivos e outros destinos
+precisam de validação específica. A presença de testes no projeto não garante
+compatibilidade com todas as versões do Deepin ou todos os aplicativos.
 
 ## Referências técnicas
 

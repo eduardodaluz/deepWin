@@ -36,7 +36,7 @@ FEATURES = [
     ('screen_next', 'Atalhos', 'Janela no próximo monitor', 'Shift + Win + →'),
     ('screenshot', 'Atalhos', 'Capturar uma área da tela', 'Win + Shift + S · Recorte e edição do Deepin.'),
     ('wallpaper', 'Aparência', 'Baixar novas paisagens automaticamente',
-     'Busca uma nova imagem no Unsplash a cada hora. Ao desativar, mantém a imagem atual.'),
+     'Busca imagens no Unsplash conforme o timer configurado. Ao desativar, mantém a imagem atual.'),
     ('zclaude', 'Ferramentas', 'Disponibilizar o comando zclaude',
      'Usa a Z.AI com a configuração já salva. Sua chave permanece protegida.'),
 ]

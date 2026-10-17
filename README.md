@@ -3,8 +3,8 @@
 ## Painel nativo do Deepin
 
 O **DeepWin** foi feito com o SDK **DTK 6 Widgets**
-em C++, usando as bibliotecas Qt/DTK e o tema do Deepin instalados. A avaliação
-dos recursos e da escolha do SDK está em [analise-gui-deepin.md](analise-gui-deepin.md).
+em C++, com integração ao tema do Deepin. As decisões de arquitetura estão
+em [analise-gui-deepin.md](analise-gui-deepin.md).
 
 O comando de abertura é `deepwin` e o identificador do aplicativo/pacote é
 `devedu.deepin-configs`. A entrada no menu usa `devedu.deepin-configs.desktop`.
@@ -17,10 +17,25 @@ Ele permite habilitar e desabilitar oito recursos:
 - Download automático de paisagens.
 - Disponibilidade do comando `zclaude`.
 
-O repositório é [eduardodaluz/deepWin](https://github.com/eduardodaluz/deepWin).
-Nesta máquina, o código fica em `~/dev/src/deepWin/`.
+### Requisitos e instalação
 
-Para instalar e adicionar ao menu, a partir da pasta do projeto:
+A interface requer uma sessão gráfica do Deepin, os runtimes DTK 6 Widgets e
+Qt 6 Widgets, Python 3 com `python3-dbus` e `python3-gi`, além de Ansible.
+Para compilar, são necessários `g++`, `pkg-config` e os headers DTK/Qt;
+o instalador pode baixar esses headers com `apt-get` para um cache local.
+Essas dependências precisam estar disponíveis antes da instalação.
+A colagem automática requer uma sessão X11; cada recurso tem requisitos próprios,
+descritos nas seções abaixo. Inclua `~/.local/bin` no `PATH` para usar os comandos
+instalados pelo nome.
+
+Clone o projeto na pasta de sua preferência:
+
+```bash
+git clone https://github.com/eduardodaluz/deepWin.git
+cd deepWin
+```
+
+A partir da pasta do projeto, instale a interface e a entrada no menu:
 
 ```bash
 ansible-playbook -i localhost, -c local deepwin.yml
@@ -33,18 +48,30 @@ Os atalhos são aplicados imediatamente pelas APIs nativas. Desativar uma
 combinação preserva outras combinações atribuídas à mesma ação.
 
 Antes da primeira alteração de cada recurso, o painel guarda o estado original
-em `~/.local/state/devedu.deepin-configs/originals.json`, com permissões restritas.
+em `$XDG_STATE_HOME/devedu.deepin-configs/originals.json`, com permissões restritas
+(por padrão, `~/.local/state/devedu.deepin-configs/originals.json`).
 O botão **Restaurar alterações** retorna esses recursos aos valores anteriores
 ao uso do painel. Voltar manualmente ao estado inicial também limpa a respectiva
 entrada de restauração. A chave da Z.AI não é lida nem alterada.
 
-O download de paisagens é independente da rotação nativa de imagens do Deepin,
-que também foi encontrada ativa. A tela informa essa diferença. Desativar o
-download mantém a imagem atual; o painel não desativa a rotação nativa.
+O download de paisagens é independente da rotação nativa de imagens do Deepin.
+Se a rotação nativa estiver ativa, a tela informa essa condição. Desativar o
+download mantém a imagem atual; o painel não altera a rotação nativa.
 
-A GUI controla os serviços já instalados. Um recurso ausente ou bloqueado é
-mostrado como indisponível; instale-o pelo respectivo playbook. A colagem em
-modo de simulação é identificada no estado, caso o serviço esteja nesse modo.
+A instalação da GUI não instala nem habilita todos os recursos. O painel
+consulta o estado da sessão e indica recursos ausentes ou bloqueados como
+indisponíveis. Para preparar cada integração:
+
+| Recurso | Preparação |
+| --- | --- |
+| Colagem automática | Aplicar `deepin-clipboard.yml`; por padrão, inicia em simulação, sem colar. |
+| Atalhos | Usar uma sessão com KGlobalAccel e as APIs de atalhos do Deepin; `deepin-shortcuts.yml` aplica as combinações sugeridas. |
+| Download agendado de paisagens | Requer `deepin-wallpaper.timer` e seu serviço no systemd do usuário. O repositório ainda não fornece a instalação dessas unidades; `deepin-wallpaper.yml` apenas troca a imagem uma vez. |
+| `zclaude` | Instalar o Claude Code e configurar a chave da Z.AI para usar o wrapper; `zclaude.yml` instala o comando. |
+
+O painel identifica quando a colagem está em modo de simulação. Habilitar esse
+recurso pela GUI não muda o modo de execução; use o playbook para ativar a
+colagem real, conforme a seção correspondente.
 
 Para compilar manualmente, usando headers oficiais em cache local:
 
@@ -59,15 +86,19 @@ não instala nem atualiza bibliotecas do sistema. Requer `g++`, `pkg-config`,
 selecionadas de acordo com as bibliotecas instaladas. Se o SDK já estiver
 instalado ou em cache, basta `./bin/build-deepwin`.
 
-Verificação sem alterar configurações:
+Verificações sem alterar configurações:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -m unittest discover -s tests -v
 ./bin/deepwin --smoke-test
 ```
 
-Com a sessão desbloqueada, a GUI fechada, sem alterações pendentes no painel e com a colagem ativa,
-é possível testar o switch e o diálogo DTK de restauração na sessão real:
+Os testes unitários usam simulações. O `--smoke-test` exige a interface
+compilada, uma sessão gráfica e as oito integrações disponíveis; um recurso
+ausente faz essa verificação falhar, mesmo que a janela abra normalmente.
+
+Com a sessão desbloqueada, a GUI fechada, sem alterações pendentes no painel
+e com a colagem ativa, é possível testar o switch e o diálogo DTK de restauração:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 tests/verify_configs_gui.py
@@ -143,9 +174,10 @@ aplicativo de origem. Só então envia uma única colagem com `xdotool`:
 Ctrl+Shift+V em terminais reconhecidos e Ctrl+V nos demais aplicativos.
 
 Funciona em X11. Usa Python 3, `python3-dbus`, `python3-gi`, libX11,
-libXfixes e `xdotool`, já presentes nesta máquina; não instala pacotes nem
-altera o Deepin, o atalho Win+V ou os dados do histórico. O script não lê
-nem registra o conteúdo copiado.
+libXfixes e `xdotool`. O playbook verifica essas dependências e interrompe
+a instalação se alguma estiver ausente; ele não instala pacotes. A automação
+preserva o atalho Win+V e os dados do histórico. O script não lê nem registra
+o conteúdo copiado.
 
 Para instalar e iniciar em **modo de simulação**, sem início automático:
 
@@ -166,7 +198,8 @@ ansible-playbook -i localhost, -c local deepin-clipboard.yml \
 O serviço usa as variáveis DISPLAY e XAUTHORITY importadas pela sessão.
 Troca de aplicativo, clique, rolagem ou outra tecla durante a espera
 cancelam a colagem. O prazo padrão é de 1,5 segundo e inclui os cerca de
-500 ms que esta versão do Deepin espera antes de aplicar a seleção.
+500 ms de atraso da seleção no `dde-clipboard` 6.1.33, referência da
+implementação. Outras versões precisam de validação de compatibilidade.
 
 Os terminais são identificados por nomes exatos de `WM_CLASS`, sem depender
 do título da janela. A lista inclui Deepin Terminal, Kitty, Alacritty,
@@ -176,8 +209,9 @@ O atalho desses terminais deve continuar configurado como Ctrl+Shift+V.
 Terminais embutidos em editores e classes personalizadas não reconhecidas
 usam a regra do aplicativo que contém a janela.
 
-Texto foi validado em editor GTK, Deepin Terminal, Kitty e Alacritty na sessão
-real; imagens, arquivos e cada aplicativo de destino precisam de validação própria.
+Os testes gráficos cobrem texto em editor GTK e oferecem verificações para
+Deepin Terminal, Kitty e Alacritty. Imagens, arquivos e cada aplicativo de
+destino precisam de validação própria.
 Existe uma pequena corrida entre a última verificação do foco e
 o envio das teclas; a automação não deve ser tratada como uma operação
 atômica do aplicativo de destino.
@@ -210,7 +244,8 @@ ser restaurada.
 
 Com o serviço parado, o teste gráfico abaixo abre dois editores temporários,
 cria itens de teste no histórico e valida a colagem e os cancelamentos.
-Execute dentro da sessão gráfica. Acrescente `--dry-run` para verificar
+Execute em uma sessão gráfica desbloqueada, com GTK 3 e seus bindings Python
+disponíveis (`python3-gi` e `gir1.2-gtk-3.0`). Acrescente `--dry-run` para verificar
 o fluxo sem enviar Ctrl+V:
 
 ```bash
@@ -233,18 +268,27 @@ Para diagnóstico interativo, também com o serviço parado:
 
 ## Papel de parede de paisagem
 
+O playbook `deepin-wallpaper.yml` executa uma troca de imagem por chamada.
+Ele não cria agendamento automático. O controle de agendamento da GUI requer
+as unidades `deepin-wallpaper.timer` e `deepin-wallpaper.service` previamente
+configuradas no systemd do usuário; a frequência depende do timer.
+
 O script `bin/refresh-deepin-wallpaper` consulta as paginas publicas de
 [paisagens](https://unsplash.com/wallpapers/nature/landscape),
 [montanhas](https://unsplash.com/wallpapers/nature/mountain) e
 [florestas](https://unsplash.com/wallpapers/nature/forest) do Unsplash a cada
 execucao, baixa uma imagem com largura de 3840 pixels e a aplica pelo esquema
-de aparencia nativo do Deepin. Nao precisa de chave de API; requer Python 3 e
-acesso a essas paginas. A descoberta depende do HTML publico do site e pode
-precisar de atualizacao se o Unsplash mudar seu formato.
+de aparencia nativo do Deepin. Nao precisa de chave de API; requer Bash,
+Python 3, `curl`, `file`, utilitários GNU e `gsettings`, além de acesso a essas
+páginas. A descoberta depende do HTML público do site e pode precisar de
+atualização se o Unsplash mudar seu formato.
 
-Os arquivos ficam em `~/Pictures/Wallpapers`. Antes de salvar, o script compara
-o SHA-256 da imagem com os arquivos ja baixados e registra as URLs utilizadas
-em `~/.local/state/deepin-wallpaper/used-landscape-urls`. Fotos ja utilizadas
+Os arquivos ficam na subpasta `Wallpapers` do diretório de imagens retornado
+por `xdg-user-dir PICTURES`; sem esse utilitário, o padrão é `~/Pictures/Wallpapers`.
+Antes de salvar, o script compara o SHA-256 da imagem com os arquivos já baixados
+e registra as URLs utilizadas em
+`$XDG_STATE_HOME/deepin-wallpaper/used-landscape-urls`
+(por padrão, `~/.local/state/deepin-wallpaper/used-landscape-urls`). Fotos ja utilizadas
 sao identificadas mesmo quando os parametros da URL mudam. O historico antigo
 e preservado. Se nao encontrar uma imagem nova ou os downloads falharem, o
 comando informa o problema e termina com erro.
@@ -286,4 +330,10 @@ Para instalar em outra máquina alcançável por SSH, a partir desta pasta:
 ansible-playbook -i <host>, zclaude.yml
 ```
 
-Requisitos: `claude` instalado e `~/.local/bin` no `PATH`.
+Requisitos: `claude` instalado, uma chave da Z.AI e `~/.local/bin` no `PATH`.
+
+Se existir um executável em `~/.local/share/claude-glm/bin/claude`, o wrapper usa
+essa cópia isolada e o diretório de configuração `~/.claude-glm`. É possível
+escolher outro executável com `ZCLAUDE_CLAUDE_BIN`. O guia
+[de diagnóstico do erro 1210](fix-glm-claudecode-erro1210.md) descreve um contorno
+específico; instalar uma versão antiga não é requisito geral do projeto.

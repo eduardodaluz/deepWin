@@ -1,21 +1,21 @@
 # Correção: erro 1210 no `zclaude`/Claude Code usando GLM (Z.AI) no Deepin
 
 **Erro:** `API Error: 400 [1210][Invalid API parameter, please check the documentation.]`
-**Sintoma:** aparece ao enviar qualquer mensagem no Claude Code **interativo** (TUI) com a GLM configurada. O comando `zclaude -p "..."` (não-interativo) funciona normalmente — isso é uma dica rápida de que é este problema.
+**Sintoma de referência:** o erro ocorre no Claude Code **interativo** (TUI) com GLM, enquanto `zclaude -p "..."` (não-interativo) pode funcionar. Compare os dois modos para auxiliar no diagnóstico.
 
 ---
 
-## Causa raiz (resumo)
+## Contexto do contorno
 
-Não parece ser problema de chave, configuração ou shell. Há relatos de uma **incompatibilidade nas versões do Claude Code posteriores à 2.1.263**: algumas requisições interativas podem combinar **sem streaming (`stream: false`) com `tools`**, combinação rejeitada pelo endpoint Anthropic da Z.AI com o código 1210. Isso é evidência de comunidade/captura de requisições, não uma confirmação oficial da causa pela Z.AI.
+Este guia registra um contorno para relatos de **incompatibilidade entre determinadas versões do Claude Code e o endpoint da Z.AI**: algumas requisições interativas podem combinar **sem streaming (`stream: false`) com `tools`**, combinação rejeitada pelo endpoint Anthropic da Z.AI com o código 1210. Isso é evidência de comunidade/captura de requisições, não uma confirmação oficial da causa pela Z.AI.
 
-A versão de contorno documentada neste arquivo é a **2.1.263**. O auto-update pode substituir o binário pinado, por isso ele deve ser desativado nessa instância.
+A versão de contorno registrada neste arquivo é a **2.1.263**. Essa referência não significa que uma instalação nova precise de downgrade. Confirme que o problema se reproduz no seu ambiente antes de aplicar o procedimento. O auto-update pode substituir o binário pinado, por isso ele deve ser desativado nessa instância.
 
 Referências: [relato no Reddit r/ZaiGLM](https://www.reddit.com/r/ZaiGLM/comments/1sejzvz/started_getting_api_error_400/), [linux.do (downgrade 2.1.263)](https://linux.do/t/topic/2877603), [códigos de erro da Z.AI](https://docs.z.ai/api-reference/api-code), [instalação do Claude Code](https://code.claude.com/docs/en/installation) e [pacote publicado no npm](https://www.npmjs.com/package/@anthropic-ai/claude-code?activeTab=versions).
 
 ## Solução no Deepin
 
-Instalar a versão 2.1.263 num **diretório separado**, sem mexer no Claude principal. Nesta máquina, o comando público é `zclaude`, instalado por `~/dev/src/deepWin/zclaude.yml`; o wrapper continuará lendo a chave de `~/.config/zai/api_key`.
+O procedimento instala a versão de contorno em um **diretório separado**, preservando o Claude principal. O wrapper `bin/zclaude`, instalado pelo playbook `zclaude.yml`, usa essa cópia quando disponível. A chave é obtida de `~/.config/zai/api_key` ou das variáveis documentadas no README.
 
 ### 1. Instalar a versão pinada
 
@@ -39,10 +39,6 @@ Crie o arquivo `~/.claude-glm/settings.json` (se ainda não existir):
 {
   "env": {
     "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
-    "API_TIMEOUT_MS": "3000000",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5.3[1m]",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-5.3-flash[1m]",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.7[1m]",
     "DISABLE_AUTOUPDATER": "1"
   }
 }
@@ -52,10 +48,10 @@ Crie o arquivo `~/.claude-glm/settings.json` (se ainda não existir):
 
 ### 3. Fazer o `zclaude` usar a cópia pinada
 
-A fonte do wrapper (`~/dev/src/deepWin/bin/zclaude`) já foi ajustada para escolher automaticamente `~/.local/share/claude-glm/bin/claude` quando ele existir. Caso contrário, ela mantém o comportamento anterior e usa o `claude` principal. Reaplique o wrapper:
+O wrapper `bin/zclaude` escolhe automaticamente `~/.local/share/claude-glm/bin/claude` quando ele existir. Caso contrário, usa o `claude` principal. A partir da pasta em que você clonou o DeepWin, instale ou atualize o wrapper:
 
 ```bash
-ansible-playbook -i localhost, -c local ~/dev/src/deepWin/zclaude.yml
+ansible-playbook -i localhost, -c local zclaude.yml
 ```
 
 ### 4. Validar
@@ -67,13 +63,13 @@ zclaude --version      # deve mostrar 2.1.263
 zclaude                # abre o TUI interativo
 ```
 
-No TUI, envie "ola" — deve responder normalmente, sem erro 1210.
+No TUI, envie uma mensagem de teste e confira se o erro 1210 deixou de ocorrer.
 
 ## Observações
 
 - **Não faça** `npm install -g @anthropic-ai/claude-code@2.1.263` sem `--prefix`: isso pode rebaixar ou sobrescrever a instalação principal. O diretório separado resolve esse problema.
-- O Claude principal (login Anthropic) continua na última versão e não é afetado.
+- O procedimento preserva a versão e a autenticação do Claude principal.
 - **Quando voltar a uma versão nova:** quando a z.ai aceitar requisições não-streaming com tools (ou uma versão do Claude Code corrigir a regressão), atualize o pino com:
   `npm install -g --prefix "$HOME/.local/share/claude-glm" @anthropic-ai/claude-code@<versao>`
-- Como conferir se já pode sair do pino: `zclaude -p "ola"` sempre funcionou; o teste que importa é mandar mensagem no **TUI interativo** na versão nova.
-- A lista de modelos pode mudar; confirme os nomes disponíveis no endpoint `GET /v1/models` antes de trocar os valores do JSON.
+- Para avaliar a remoção do pino, compare o envio de mensagens no **TUI interativo** e no modo `zclaude -p "ola"` com a versão que pretende usar.
+- O exemplo não fixa modelos. Se configurar modelos explicitamente, escolha os identificadores disponíveis para sua conta na Z.AI.
