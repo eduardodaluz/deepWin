@@ -1,0 +1,459 @@
+#!/usr/bin/python3
+"""Cola a seleção do dde-clipboard após Enter, usando eventos nativos e X11.
+
+Terminais reconhecidos recebem Ctrl+Shift+V; os demais aplicativos, Ctrl+V.
+Não lê o conteúdo do clipboard. --dry-run valida o fluxo sem enviar teclas.
+"""
+
+import argparse
+import ctypes as C
+import ctypes.util
+from dataclasses import dataclass
+import fcntl
+import logging
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+
+
+LOG = logging.getLogger("deepin-clipboard-autopaste")
+CLIP = "org.deepin.dde.Clipboard1"
+CLIP_PATH = "/org/deepin/dde/Clipboard1"
+MONITOR = "org.deepin.dde.XEventMonitor1"
+MONITOR_PATH = "/org/deepin/dde/XEventMonitor1"
+ENTER = {"Return", "KP_Enter", "\r", "\n"}
+TERMINAL_CLASSES = frozenset({
+    b"deepin-terminal", b"alacritty", b"kitty", b"konsole", b"org.kde.konsole",
+    b"gnome-terminal", b"gnome-terminal-server", b"org.gnome.terminal",
+    b"xfce4-terminal", b"mate-terminal", b"qterminal", b"lxterminal",
+    b"tilix", b"com.gexperts.tilix", b"terminator", b"guake", b"yakuake",
+    b"org.kde.yakuake", b"wezterm", b"org.wezfurlong.wezterm",
+    b"ghostty", b"com.mitchellh.ghostty", b"kgx", b"org.gnome.console",
+    b"ptyxis", b"org.gnome.ptyxis",
+})
+
+
+def paste_shortcut(wm_class):
+    """Comparar os nomes exatos de WM_CLASS, nunca títulos ou substrings."""
+    if isinstance(wm_class, bytes) and TERMINAL_CLASSES.intersection(
+            wm_class.lower().split(b"\0")):
+        return "ctrl+shift+v"
+    return "ctrl+v"
+
+
+@dataclass
+class Attempt:
+    target: int
+    deadline: float
+    selected: bool = False
+    hidden: bool = False
+    stable_since: float | None = None
+
+    def ready(self, now, active, focused, keys_up):
+        if now >= self.deadline or active not in (0, self.target):
+            return "cancel"
+        if not (self.selected and self.hidden and active == self.target
+                and focused and keys_up):
+            self.stable_since = None
+            return "wait"
+        if self.stable_since is None:
+            self.stable_since = now
+        return "paste" if now - self.stable_since >= 0.04 else "wait"
+
+
+class XAny(C.Structure):
+    _fields_ = [("type", C.c_int), ("serial", C.c_ulong),
+                ("send_event", C.c_int), ("display", C.c_void_p),
+                ("window", C.c_ulong)]
+
+
+class XProperty(C.Structure):
+    _fields_ = XAny._fields_ + [("atom", C.c_ulong), ("time", C.c_ulong),
+                              ("state", C.c_int)]
+
+
+class XSelection(C.Structure):
+    _fields_ = XAny._fields_ + [("subtype", C.c_int), ("owner", C.c_ulong),
+                              ("selection", C.c_ulong),
+                              ("timestamp", C.c_ulong),
+                              ("selection_timestamp", C.c_ulong)]
+
+
+class XEvent(C.Union):
+    _fields_ = [("type", C.c_int), ("any", XAny), ("property", XProperty),
+                ("selection", XSelection), ("pad", C.c_long * 24)]
+
+
+class X11:
+    """Pequena ponte para as bibliotecas X11 já instaladas, sem python-xlib."""
+
+    def __init__(self):
+        self.lib = C.CDLL(ctypes.util.find_library("X11"))
+        self.fixes = C.CDLL(ctypes.util.find_library("Xfixes"))
+        bindings = {
+            "XOpenDisplay": (C.c_void_p, [C.c_char_p]),
+            "XCloseDisplay": (C.c_int, [C.c_void_p]),
+            "XDefaultRootWindow": (C.c_ulong, [C.c_void_p]),
+            "XConnectionNumber": (C.c_int, [C.c_void_p]),
+            "XInternAtom": (C.c_ulong, [C.c_void_p, C.c_char_p, C.c_int]),
+            "XSelectInput": (C.c_int, [C.c_void_p, C.c_ulong, C.c_long]),
+            "XPending": (C.c_int, [C.c_void_p]),
+            "XNextEvent": (C.c_int, [C.c_void_p, C.POINTER(XEvent)]),
+            "XRefreshKeyboardMapping": (C.c_int, [C.POINTER(XEvent)]),
+            "XFlush": (C.c_int, [C.c_void_p]),
+            "XFree": (C.c_int, [C.c_void_p]),
+            "XGetInputFocus": (C.c_int, [C.c_void_p, C.POINTER(C.c_ulong),
+                                         C.POINTER(C.c_int)]),
+            "XQueryTree": (C.c_int, [C.c_void_p, C.c_ulong,
+                                     C.POINTER(C.c_ulong), C.POINTER(C.c_ulong),
+                                     C.POINTER(C.POINTER(C.c_ulong)),
+                                     C.POINTER(C.c_uint)]),
+            "XQueryKeymap": (C.c_int, [C.c_void_p, C.POINTER(C.c_char)]),
+            "XStringToKeysym": (C.c_ulong, [C.c_char_p]),
+            "XKeysymToKeycode": (C.c_ubyte, [C.c_void_p, C.c_ulong]),
+            "XGetWindowProperty": (C.c_int, [
+                C.c_void_p, C.c_ulong, C.c_ulong, C.c_long, C.c_long,
+                C.c_int, C.c_ulong, C.POINTER(C.c_ulong), C.POINTER(C.c_int),
+                C.POINTER(C.c_ulong), C.POINTER(C.c_ulong),
+                C.POINTER(C.POINTER(C.c_ubyte))]),
+        }
+        for name, (result, args) in bindings.items():
+            func = getattr(self.lib, name)
+            func.restype, func.argtypes = result, args
+        # Janelas podem desaparecer entre uma notificação e uma consulta.
+        callback = C.CFUNCTYPE(C.c_int, C.c_void_p, C.c_void_p)
+        self.error_handler = callback(lambda _display, _error: 0)
+        self.lib.XSetErrorHandler.argtypes = [callback]
+        self.lib.XSetErrorHandler.restype = C.c_void_p
+        self.previous_error_handler = self.lib.XSetErrorHandler(self.error_handler)
+        self.display = self.lib.XOpenDisplay(None)
+        if not self.display:
+            raise RuntimeError("Não foi possível acessar DISPLAY/XAUTHORITY da sessão X11")
+        self.root = self.lib.XDefaultRootWindow(self.display)
+        self.active_atom = self.atom("_NET_ACTIVE_WINDOW")
+        self.clipboard_atom = self.atom("CLIPBOARD")
+        self.fixes.XFixesQueryExtension.argtypes = [
+            C.c_void_p, C.POINTER(C.c_int), C.POINTER(C.c_int)]
+        self.fixes.XFixesQueryExtension.restype = C.c_int
+        base, error = C.c_int(), C.c_int()
+        if not self.fixes.XFixesQueryExtension(self.display, C.byref(base), C.byref(error)):
+            raise RuntimeError("A extensão XFIXES não está disponível")
+        self.selection_event = base.value
+        self.fixes.XFixesSelectSelectionInput.argtypes = [
+            C.c_void_p, C.c_ulong, C.c_ulong, C.c_ulong]
+        self.fixes.XFixesSelectSelectionInput.restype = None
+        self.fixes.XFixesSelectSelectionInput(
+            self.display, self.root, self.clipboard_atom, 7)
+        self.lib.XSelectInput(self.display, self.root, (1 << 22) | (1 << 19))
+        self.lib.XFlush(self.display)
+        self.blocking_codes = set()
+        self.refresh_keycodes()
+
+    def refresh_keycodes(self):
+        names = ("Return", "KP_Enter", "Shift_L", "Shift_R", "Control_L",
+                 "Control_R", "Alt_L", "Alt_R", "Super_L", "Super_R",
+                 "Meta_L", "Meta_R", "ISO_Level3_Shift", "ISO_Level5_Shift")
+        self.blocking_codes = {int(self.lib.XKeysymToKeycode(
+            self.display, self.lib.XStringToKeysym(name.encode()))) for name in names} - {0}
+
+    def atom(self, name):
+        return self.lib.XInternAtom(self.display, name.encode(), False)
+
+    def prop(self, window, name):
+        if not window:
+            return None
+        actual, fmt, count, remaining = C.c_ulong(), C.c_int(), C.c_ulong(), C.c_ulong()
+        data = C.POINTER(C.c_ubyte)()
+        status = self.lib.XGetWindowProperty(
+            self.display, window, self.atom(name), 0, 1024, False, 0,
+            C.byref(actual), C.byref(fmt), C.byref(count), C.byref(remaining), C.byref(data))
+        try:
+            if status or not actual.value or not data:
+                return None
+            if fmt.value == 32:
+                return list(C.cast(data, C.POINTER(C.c_ulong))[:count.value])
+            if fmt.value == 8:
+                return C.string_at(data, count.value)
+            return None
+        finally:
+            if data:
+                self.lib.XFree(data)
+
+    def active(self):
+        values = self.prop(self.root, "_NET_ACTIVE_WINDOW")
+        return values[0] if values else 0
+
+    def clipboard_window(self, window, pid):
+        classes = self.prop(window, "WM_CLASS")
+        process = self.prop(window, "_NET_WM_PID")
+        return (isinstance(classes, bytes) and b"dde-clipboard" in classes.split(b"\0")
+                and process == [pid])
+
+    def focused_on(self, target):
+        focus, revert = C.c_ulong(), C.c_int()
+        self.lib.XGetInputFocus(self.display, C.byref(focus), C.byref(revert))
+        window = focus.value
+        for _ in range(32):
+            if window == target:
+                return True
+            if window in (0, 1, self.root):
+                return False
+            root, parent, count = C.c_ulong(), C.c_ulong(), C.c_uint()
+            children = C.POINTER(C.c_ulong)()
+            ok = self.lib.XQueryTree(self.display, window, C.byref(root),
+                                    C.byref(parent), C.byref(children), C.byref(count))
+            if children:
+                self.lib.XFree(children)
+            if not ok or parent.value == window:
+                return False
+            window = parent.value
+        return False
+
+    def keys_up(self, include_enter=True):
+        keys = C.create_string_buffer(32)
+        self.lib.XQueryKeymap(self.display, keys)
+        codes = self.blocking_codes
+        if not include_enter:
+            enter_codes = {self.lib.XKeysymToKeycode(
+                self.display, self.lib.XStringToKeysym(n)) for n in (b"Return", b"KP_Enter")}
+            codes = codes - enter_codes
+        return not any(keys.raw[code // 8] & (1 << (code % 8)) for code in codes)
+
+    def events(self):
+        while self.lib.XPending(self.display):
+            event = XEvent()
+            self.lib.XNextEvent(self.display, C.byref(event))
+            yield event
+
+    def close(self):
+        self.lib.XCloseDisplay(self.display)
+
+
+class Application:
+    def __init__(self, args):
+        import dbus
+        from dbus.mainloop.glib import DBusGMainLoop
+        from gi.repository import GLib
+
+        self.GLib = GLib
+        self.args = args
+        self.attempt = None
+        self.target = 0
+        self.visible = False
+        self.last_normal = 0
+        self.clip_window = 0
+        self.timer = 0
+        self.region = None
+        self.exit_code = 0
+        self.loop = GLib.MainLoop()
+        DBusGMainLoop(set_as_default=True)
+        self.bus = dbus.SessionBus()
+        self.x = X11()
+        bus_daemon = dbus.Interface(self.bus.get_object(
+            "org.freedesktop.DBus", "/org/freedesktop/DBus"), "org.freedesktop.DBus")
+        self.clip_pid = int(bus_daemon.GetConnectionUnixProcessID(CLIP))
+        monitor_proxy = self.bus.get_object(MONITOR, MONITOR_PATH)
+        self.monitor = dbus.Interface(monitor_proxy, MONITOR)
+        self.region = str(self.monitor.RegisterFullScreen())
+        self.bus.add_signal_receiver(self.key_press, signal_name="KeyPress",
+                                     dbus_interface=MONITOR, bus_name=MONITOR,
+                                     path=MONITOR_PATH, arg3=self.region)
+        self.bus.add_signal_receiver(self.button_press, signal_name="ButtonPress",
+                                     dbus_interface=MONITOR, bus_name=MONITOR,
+                                     path=MONITOR_PATH, arg3=self.region)
+        self.bus.add_signal_receiver(self.visibility, signal_name="clipboardVisibleChanged",
+                                     dbus_interface=CLIP, bus_name=CLIP, path=CLIP_PATH)
+        for name in (CLIP, MONITOR):
+            self.bus.add_signal_receiver(self.owner_changed, signal_name="NameOwnerChanged",
+                                         dbus_interface="org.freedesktop.DBus", arg0=name)
+        clip = self.bus.get_object(CLIP, CLIP_PATH)
+        self.visible = bool(dbus.Interface(clip, "org.freedesktop.DBus.Properties").Get(
+            CLIP, "clipboardVisible"))
+        # Iniciar com o histórico aberto não fornece uma origem confiável.
+        self.refresh_active()
+        GLib.io_add_watch(self.x.lib.XConnectionNumber(self.x.display),
+                         GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR, self.x_events)
+        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, self.stop)
+        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, self.stop)
+
+    def stop(self):
+        self.loop.quit()
+        return False
+
+    def cancel(self, reason):
+        if self.attempt:
+            LOG.info("Colagem cancelada: %s", reason)
+        self.attempt = None
+        self.target = 0
+
+    def refresh_active(self):
+        active = self.x.active()
+        is_clip = self.x.clipboard_window(active, self.clip_pid)
+        if is_clip:
+            self.clip_window = active
+            if self.visible and not self.target and not self.attempt:
+                self.target = self.last_normal
+        elif active:
+            if self.attempt and active != self.attempt.target:
+                self.cancel("outra janela foi ativada")
+            elif self.target and active != self.target:
+                self.target = 0
+            self.last_normal = active
+        if self.args.diagnose and active != getattr(self, "previous_active", None):
+            LOG.info("Foco: janela=0x%x histórico=%s", active, is_clip)
+        self.previous_active = active
+        return active
+
+    def visibility(self, visible):
+        self.visible = bool(visible)
+        if visible:
+            self.cancel("histórico reaberto")
+            self.target = self.last_normal
+        elif self.attempt:
+            self.attempt.hidden = True
+        else:
+            self.target = 0
+        self.refresh_active()
+        if self.args.diagnose:
+            LOG.info("Histórico visível=%s", self.visible)
+
+    def key_press(self, key, _x, _y, _region):
+        key = str(key)
+        if self.attempt:
+            if key not in ENTER:
+                self.cancel("outra tecla durante a espera")
+            return
+        if key not in ENTER or not self.visible or not self.target:
+            return
+        self.drain_events()
+        active = self.refresh_active()
+        if (not self.x.clipboard_window(active, self.clip_pid)
+                or not self.x.focused_on(active)
+                or not self.x.keys_up(include_enter=False)):
+            return
+        self.attempt = Attempt(self.target, time.monotonic() + self.args.timeout)
+        LOG.info("Enter no histórico: destino=0x%x", self.target)
+        if not self.timer:
+            self.timer = self.GLib.timeout_add(20, self.tick)
+
+    def button_press(self, *_args):
+        if self.attempt:
+            self.cancel("clique ou rolagem durante a espera")
+
+    def drain_events(self):
+        for event in self.x.events():
+            if event.type == self.x.selection_event:
+                if self.attempt and event.selection.selection == self.x.clipboard_atom:
+                    if event.selection.subtype == 0 and event.selection.owner:
+                        self.attempt.selected = True
+                        if self.args.diagnose:
+                            LOG.info("Seleção CLIPBOARD atualizada")
+                    else:
+                        self.cancel("seleção CLIPBOARD indisponível")
+            elif event.type == 28 and event.property.atom == self.x.active_atom:
+                self.refresh_active()
+            elif event.type == 34:  # MappingNotify: layout do teclado alterado.
+                self.x.lib.XRefreshKeyboardMapping(C.byref(event))
+                self.x.refresh_keycodes()
+
+    def x_events(self, _fd, condition):
+        if condition & (self.GLib.IO_HUP | self.GLib.IO_ERR):
+            self.exit_code = 1
+            return self.stop()
+        self.drain_events()
+        return True
+
+    def tick(self):
+        self.drain_events()
+        active = self.refresh_active()
+        attempt = self.attempt
+        if attempt:
+            # Enquanto o histórico está aberto, ele continua legitimamente ativo.
+            if active == self.clip_window:
+                decision = "cancel" if time.monotonic() >= attempt.deadline else "wait"
+            else:
+                decision = attempt.ready(time.monotonic(), active,
+                                         self.x.focused_on(attempt.target), self.x.keys_up())
+            if decision == "cancel":
+                self.cancel("destino indisponível ou prazo esgotado")
+            elif decision == "paste":
+                shortcut = paste_shortcut(self.x.prop(attempt.target, "WM_CLASS"))
+                label = "Ctrl+Shift+V" if shortcut == "ctrl+shift+v" else "Ctrl+V"
+                # Revalidar imediatamente antes de enviar as teclas.
+                if (self.x.active() != attempt.target
+                        or not self.x.focused_on(attempt.target)
+                        or not self.x.keys_up()):
+                    self.cancel("foco ou teclado mudou antes da colagem")
+                else:
+                    self.attempt = None
+                    self.target = 0
+                    if self.args.dry_run:
+                        LOG.info("SIMULAÇÃO: colaria em 0x%x usando %s", attempt.target, label)
+                    else:
+                        try:
+                            result = subprocess.run(["xdotool", "key", "--delay", "12", shortcut],
+                                                    timeout=2, check=False, capture_output=True)
+                            if result.returncode:
+                                LOG.error("xdotool falhou ao enviar %s (código %s)", label, result.returncode)
+                            else:
+                                LOG.info("%s enviado: destino=0x%x", label, attempt.target)
+                        except (OSError, subprocess.TimeoutExpired) as error:
+                            LOG.error("Falha ao enviar %s: %s", label, error)
+        if not self.attempt:
+            self.timer = 0
+            return False
+        return True
+
+    def owner_changed(self, _name, old_owner, new_owner):
+        if old_owner != new_owner:
+            self.cancel("serviço nativo reiniciado")
+            self.exit_code = 1
+            self.stop()
+
+    def run(self):
+        LOG.info("Iniciado em modo %s", "simulação" if self.args.dry_run else "colagem")
+        try:
+            self.loop.run()
+        finally:
+            try:
+                self.monitor.UnregisterArea(self.region)
+            except Exception:
+                pass
+            self.x.close()
+        return self.exit_code
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dry-run", action="store_true", help="não enviar Ctrl+V")
+    parser.add_argument("--diagnose", action="store_true", help="registrar foco e etapas, sem conteúdo")
+    parser.add_argument("--timeout", type=float, default=1.5, help="prazo máximo após Enter, em segundos")
+    args = parser.parse_args()
+    if not 0.6 <= args.timeout <= 5:
+        parser.error("--timeout deve estar entre 0.6 e 5 segundos")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    if os.environ.get("XDG_SESSION_TYPE") != "x11":
+        LOG.error("Este script requer uma sessão X11")
+        return 1
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    if not runtime:
+        LOG.error("XDG_RUNTIME_DIR não definido; execute dentro da sessão gráfica")
+        return 1
+    with (Path(runtime) / "deepin-clipboard-autopaste.lock").open("w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            LOG.error("Já existe uma instância em execução")
+            return 1
+        try:
+            return Application(args).run()
+        except Exception as error:
+            LOG.error("Falha: %s", error)
+            return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,11 @@
+---
+# Baixa uma paisagem e a aplica como papel de parede do Deepin.
+# Aplicar: ansible-playbook -i localhost, -c local deepin-wallpaper.yml
+- name: Atualizar papel de parede do Deepin
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Baixar e aplicar uma paisagem
+      ansible.builtin.script: bin/refresh-deepin-wallpaper

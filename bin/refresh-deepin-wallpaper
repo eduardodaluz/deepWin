@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# Baixa uma paisagem e a aplica como papel de parede no Deepin.
+set -Eeuo pipefail
+
+readonly deepin_schema='com.deepin.dde.appearance'
+
+# Paginas publicas: a lista e renovada a cada execucao, sem chave de API.
+readonly -a landscape_pages=(
+  'https://unsplash.com/wallpapers/nature/landscape'
+  'https://unsplash.com/wallpapers/nature/mountain'
+  'https://unsplash.com/wallpapers/nature/forest'
+)
+
+temporary_file=''
+catalog_file=''
+page_file=''
+cleanup() {
+  for pending_file in "$temporary_file" "$catalog_file" "$page_file"; do
+    [[ -z $pending_file ]] || rm -f -- "$pending_file"
+  done
+}
+trap cleanup EXIT
+
+fetch_landscape_urls() {
+  local page_url
+  catalog_file=$(mktemp)
+  page_file=$(mktemp)
+  for page_url in "${landscape_pages[@]}"; do
+    printf 'Consultando paisagens: %s\n' "$page_url" >&2
+    if ! curl --fail --location --silent --show-error --retry 1 \
+      --connect-timeout 15 --max-time 45 --output "$page_file" "$page_url"; then
+      continue
+    fi
+    python3 - "$page_file" >> "$catalog_file" <<'PYTHON'
+import html
+import re
+import sys
+from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+page = html.unescape(Path(sys.argv[1]).read_text()).replace(r"\u0026", "&")
+seen = set()
+for raw in re.findall(r'https://images\.unsplash\.com/photo-[^\s"<>\\]+', page):
+    parts = urlsplit(raw)
+    if parts.path in seen:
+        continue
+    seen.add(parts.path)
+    params = dict(parse_qsl(parts.query))
+    # Conserva os identificadores do Unsplash e substitui o tamanho da miniatura.
+    params = {k: v for k, v in params.items() if k in ("ixid", "ixlib")}
+    params.update(auto="format", fit="crop", w="3840", q="90")
+    print(urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(params), "")))
+PYTHON
+  done
+  if [[ ! -s $catalog_file ]]; then
+    printf 'Nao foi possivel obter fotos das paginas publicas do Unsplash.\n' >&2
+    return 1
+  fi
+}
+
+usage() {
+  printf 'Uso: %s [--url URL]\n' "${0##*/}"
+  printf 'Sem --url, busca novas paisagens nas paginas publicas do Unsplash.\n'
+}
+
+url=''
+if [[ $# -gt 0 ]]; then
+  if [[ $# -eq 2 && $1 == '--url' ]]; then
+    url=$2
+  else
+    usage >&2
+    exit 2
+  fi
+fi
+
+if command -v xdg-user-dir >/dev/null 2>&1; then
+  pictures_dir=$(xdg-user-dir PICTURES)
+else
+  pictures_dir="$HOME/Pictures"
+fi
+readonly wallpaper_dir="$pictures_dir/Wallpapers"
+mkdir -p "$wallpaper_dir"
+
+readonly state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/deepin-wallpaper"
+readonly used_urls_file="$state_dir/used-landscape-urls"
+mkdir -p "$state_dir"
+touch "$used_urls_file"
+
+has_existing_hash() {
+  local candidate_file=$1
+  local candidate_hash existing_file existing_hash
+
+  candidate_hash=$(sha256sum "$candidate_file" | awk '{print $1}')
+  while IFS= read -r -d '' existing_file; do
+    existing_hash=$(sha256sum "$existing_file" | awk '{print $1}')
+    [[ $existing_hash == "$candidate_hash" ]] && return 0
+  done < <(find "$wallpaper_dir" -maxdepth 1 -type f \
+    \( -name 'landscape-*' -o -name 'unsplash-photo-*' \) -print0)
+  return 1
+}
+
+if [[ -n $url ]]; then
+  candidate_urls=("$url")
+else
+  command -v python3 >/dev/null 2>&1 || {
+    printf 'Python 3 e necessario para consultar o Unsplash.\n' >&2
+    exit 1
+  }
+  fetch_landscape_urls
+  mapfile -t candidate_urls < <(shuf "$catalog_file")
+fi
+
+# Compara pelo identificador da foto, independentemente dos parametros de tamanho.
+declare -A used_photos=()
+while IFS= read -r used_url; do
+  [[ -z $used_url ]] || used_photos["${used_url%%\?*}"]=1
+done < "$used_urls_file"
+
+for candidate_url in "${candidate_urls[@]}"; do
+  photo_url=${candidate_url%%\?*}
+  if [[ -z $url && -n ${used_photos[$photo_url]:-} ]]; then
+    continue
+  fi
+
+  temporary_file=$(mktemp "$wallpaper_dir/.wallpaper-download.XXXXXX")
+  printf 'Baixando paisagem...\n'
+  if ! curl --fail --location --retry 3 --connect-timeout 15 --max-time 180 \
+    --output "$temporary_file" "$candidate_url"; then
+    rm -f "$temporary_file"
+    continue
+  fi
+
+  mime_type=$(file --brief --mime-type "$temporary_file")
+  case "$mime_type" in
+    image/jpeg) extension='jpg' ;;
+    image/png) extension='png' ;;
+    image/webp) extension='webp' ;;
+    *)
+      printf 'Ignorando download que nao e uma imagem suportada (%s).\n' "$mime_type" >&2
+      rm -f "$temporary_file"
+      continue
+      ;;
+  esac
+
+  if has_existing_hash "$temporary_file"; then
+    printf 'Ignorando paisagem repetida.\n'
+    printf '%s\n' "$candidate_url" >> "$used_urls_file"
+    used_photos["$photo_url"]=1
+    rm -f "$temporary_file"
+    continue
+  fi
+
+  timestamp=$(date '+%Y%m%d-%H%M%S')
+  source_identifier=$(basename "${candidate_url%%\?*}")
+  wallpaper_file="$wallpaper_dir/unsplash-$source_identifier-$timestamp.$extension"
+  mv "$temporary_file" "$wallpaper_file"
+
+  wallpaper_uri="file://$wallpaper_file"
+  gsettings set "$deepin_schema" background-uris "['$wallpaper_uri']"
+  printf '%s\n' "$candidate_url" >> "$used_urls_file"
+
+  printf 'Papel de parede aplicado: %s\n' "$wallpaper_file"
+  exit 0
+done
+
+printf 'Nenhuma paisagem nova foi baixada; as fotos disponiveis ja foram usadas ou os downloads falharam.\n' >&2
+exit 1

@@ -1,0 +1,140 @@
+---
+# Instalar o DeepWin: ansible-playbook -i localhost, -c local deepwin.yml
+# Remover somente a GUI: acrescentar -e deepwin_state=absent
+- name: Instalar o DeepWin com o SDK DTK do Deepin
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    deepwin_state: present
+    deepwin_app_id: devedu.deepin-configs
+    deepwin_home: "{{ lookup('env', 'HOME') }}"
+    deepwin_data_home: "{{ lookup('env', 'XDG_DATA_HOME') | default(deepwin_home + '/.local/share', true) }}"
+    deepwin_data: "{{ deepwin_data_home }}/{{ deepwin_app_id }}"
+
+  tasks:
+    - name: Validar a operacao
+      ansible.builtin.assert:
+        that: deepwin_state in ['present', 'absent']
+
+    - name: Instalar a interface sem alterar os recursos configurados
+      when: deepwin_state == 'present'
+      block:
+        - name: Verificar dependencias de execucao
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/python3
+              - -c
+              - |
+                import ctypes.util, dbus
+                from gi.repository import Gio
+                assert ctypes.util.find_library('dtk6widget'), 'DTK 6 Widgets ausente'
+                assert ctypes.util.find_library('Qt6Widgets'), 'Qt 6 Widgets ausente'
+          changed_when: false
+          check_mode: false
+
+        - name: Verificar o cache local do SDK
+          ansible.builtin.stat:
+            path: "{{ playbook_dir }}/.build/deepwin/sdk/usr/include/dtk6/DWidget/DApplication"
+          register: deepwin_sdk
+
+        - name: Verificar o SDK instalado no sistema
+          ansible.builtin.command:
+            argv: [pkg-config, --exists, dtk6widget]
+          register: deepwin_system_sdk
+          failed_when: false
+          changed_when: false
+          check_mode: false
+
+        - name: Compilar contra o SDK nativo do Deepin
+          ansible.builtin.command:
+            argv: >-
+              {{ [playbook_dir + '/bin/build-deepwin'] +
+                 (['--fetch-sdk'] if not deepwin_sdk.stat.exists and
+                  deepwin_system_sdk.rc != 0 else []) }}
+            chdir: "{{ playbook_dir }}"
+          changed_when: false
+
+        - name: Migrar os backups antigos sem sobrescrever o estado existente
+          ansible.builtin.command:
+            argv: [/usr/bin/python3, "{{ playbook_dir }}/gui/backend.py", migrate-state]
+          register: deepwin_migration
+          changed_when: (deepwin_migration.stdout | from_json).changed | bool
+
+        - name: Criar os diretorios do aplicativo
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+            mode: '0755'
+          loop:
+            - "{{ deepwin_data }}/gui"
+            - "{{ deepwin_data }}/bin"
+            - "{{ deepwin_home }}/.local/bin"
+            - "{{ deepwin_data_home }}/applications"
+
+        - name: Instalar a janela DTK
+          ansible.builtin.copy:
+            src: .build/deepwin/deepwin-ui
+            dest: "{{ deepwin_data }}/deepwin-ui"
+            mode: '0755'
+
+        - name: Instalar o controlador
+          ansible.builtin.copy:
+            src: gui/backend.py
+            dest: "{{ deepwin_data }}/gui/backend.py"
+            mode: '0644'
+
+        - name: Instalar o recurso do wrapper sem ativar o comando
+          ansible.builtin.copy:
+            src: bin/zclaude
+            dest: "{{ deepwin_data }}/bin/zclaude"
+            mode: '0755'
+
+        - name: Instalar o launcher
+          ansible.builtin.copy:
+            src: bin/deepwin
+            dest: "{{ deepwin_home }}/.local/bin/deepwin"
+            mode: '0755'
+
+        - name: Adicionar ao menu do Deepin
+          ansible.builtin.copy:
+            dest: "{{ deepwin_data_home }}/applications/{{ deepwin_app_id }}.desktop"
+            mode: '0644'
+            content: |
+              [Desktop Entry]
+              Type=Application
+              Name=DeepWin
+              Comment=Ative e desative seus ajustes pessoais do Deepin
+              Exec="{{ deepwin_home }}/.local/bin/deepwin"
+              Icon=preferences-system
+              Terminal=false
+              Categories=Settings;DesktopSettings;
+              StartupNotify=true
+              StartupWMClass=deepwin
+
+        - name: Remover a instalacao anterior apos instalar o DeepWin
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - "{{ deepwin_home }}/.local/bin/deepin-configs"
+            - "{{ deepwin_data_home }}/applications/deepin-configs.desktop"
+            - "{{ deepwin_data_home }}/deepin-configs"
+
+    - name: Remover somente o aplicativo grafico
+      when: deepwin_state == 'absent'
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ deepwin_data }}"
+        - "{{ deepwin_home }}/.local/bin/deepwin"
+        - "{{ deepwin_data_home }}/applications/{{ deepwin_app_id }}.desktop"
+
+    - name: Informar como abrir
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'Abra DeepWin no menu do Deepin ou execute deepwin.'
+             if deepwin_state == 'present'
+             else 'GUI removida. Os recursos e os backups de restauração foram preservados.' }}

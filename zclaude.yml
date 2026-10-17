@@ -1,0 +1,47 @@
+---
+# Instala o zclaude, wrapper do Claude Code que usa a API da Z.AI (GLM).
+# Aplicar localmente: ansible-playbook -i localhost, -c local zclaude.yml
+# Aplicar em outra maquina: ansible-playbook -i <host>, zclaude.yml
+- name: Instalar o zclaude para o usuario
+  hosts: all
+  gather_facts: true
+
+  vars:
+    zclaude_bin_dir: "{{ ansible_user_dir }}/.local/bin"
+    zclaude_bin: "{{ zclaude_bin_dir }}/zclaude"
+
+  tasks:
+    - name: Garantir que o diretorio de binarios do usuario existe
+      ansible.builtin.file:
+        path: "{{ zclaude_bin_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Instalar o zclaude em ~/.local/bin
+      ansible.builtin.copy:
+        src: bin/zclaude
+        dest: "{{ zclaude_bin }}"
+        mode: '0755'
+
+    # O Debian e o Ubuntu incluem ~/.local/bin no PATH pelo ~/.profile
+    # quando o diretorio existe; em outras distros pode ser preciso adicionar.
+    - name: Verificar se o ~/.profile do usuario existe
+      ansible.builtin.stat:
+        path: "{{ ansible_user_dir }}/.profile"
+      register: user_profile
+
+    - name: Ler o ~/.profile do usuario
+      ansible.builtin.slurp:
+        src: "{{ ansible_user_dir }}/.profile"
+      register: user_profile_content
+      when: user_profile.stat.exists
+
+    - name: Avisar se o ~/.profile nao incluir o diretorio de binarios
+      ansible.builtin.debug:
+        msg: >-
+          O ~/.profile nao inclui ~/.local/bin no PATH. Adicione-o para
+          usar o zclaude e execute 'zclaude --setup' para salvar a chave
+          da Z.AI.
+      when: >-
+        not user_profile.stat.exists
+        or '.local/bin' not in (user_profile_content.content | b64decode)

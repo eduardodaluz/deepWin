@@ -1,0 +1,149 @@
+---
+# Atalhos globais do dde-kwin e do Deepin.
+# Aplicar: ansible-playbook -i localhost, -c local deepin-shortcuts.yml
+- name: Configurar atalhos de janelas, areas de trabalho e captura no Deepin
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    kglobal_shortcuts_file: "{{ lookup('env', 'HOME') }}/.config/kglobalshortcutsrc"
+    kglobal_shortcuts_backup: "{{ lookup('env', 'HOME') }}/.config/kglobalshortcutsrc.before-deepin-shortcuts"
+    # Abre a captura de area do Deepin, com as ferramentas de recorte e edicao.
+    # A sintaxe e a do GSettings; Super corresponde a tecla Win.
+    deepin_area_screenshot_shortcut: "['<Shift><Super>S']"
+    # O dde-daemon recebe o acelerador sem a lista do GSettings.
+    deepin_area_screenshot_accelerator: '<Shift><Super>S'
+    # O dde-daemon atual usa o ID completo do atalho, em vez de `screenshot`.
+    deepin_area_screenshot_id: org.deepin.dde.keybinding.shortcut.app.screenshot
+    kwin_shortcuts:
+      - name: Alternar para a proxima area de trabalho
+        regexp: '^Switch to Next Desktop='
+        line: 'Switch to Next Desktop=Meta+Ctrl+Right,Meta+Ctrl+Right,Mudar para a proxima area de trabalho'
+      - name: Alternar para a area de trabalho anterior
+        regexp: '^Switch to Previous Desktop='
+        line: 'Switch to Previous Desktop=Meta+Ctrl+Left,Meta+Ctrl+Left,Alternar para a area de trabalho anterior'
+      - name: Mover janela para o proximo monitor
+        regexp: '^Window to Next Screen='
+        line: 'Window to Next Screen=Meta+Shift+Right,Meta+Shift+Right,Janela para a proxima tela'
+      - name: Mover janela para o monitor anterior
+        regexp: '^Window to Previous Screen='
+        line: 'Window to Previous Screen=Meta+Shift+Left,Meta+Shift+Left,Janela para a tela anterior'
+
+  tasks:
+    - name: Verificar se a configuracao de atalhos do KWin existe
+      ansible.builtin.stat:
+        path: "{{ kglobal_shortcuts_file }}"
+      register: kglobal_shortcuts
+
+    - name: Interromper se a configuracao do KWin nao existir
+      ansible.builtin.assert:
+        that: kglobal_shortcuts.stat.exists
+        fail_msg: "Arquivo ausente: {{ kglobal_shortcuts_file }}"
+
+    - name: Preservar backup original uma unica vez
+      ansible.builtin.copy:
+        src: "{{ kglobal_shortcuts_file }}"
+        dest: "{{ kglobal_shortcuts_backup }}"
+        remote_src: true
+        force: false
+        mode: preserve
+
+    - name: Ativar atalhos do KWin
+      ansible.builtin.lineinfile:
+        path: "{{ kglobal_shortcuts_file }}"
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        insertafter: '^\\[kwin\\]$'
+      loop: "{{ kwin_shortcuts }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Consultar o atalho atual da captura de area do Deepin
+      ansible.builtin.command:
+        argv:
+          - gsettings
+          - get
+          - com.deepin.dde.keybinding.system
+          - screenshot
+      register: deepin_area_screenshot_current
+      changed_when: false
+      tags: [screenshot]
+
+    - name: Definir Win Shift S para recortar e editar a captura de tela
+      ansible.builtin.command:
+        argv:
+          - gsettings
+          - set
+          - com.deepin.dde.keybinding.system
+          - screenshot
+          - "{{ deepin_area_screenshot_shortcut }}"
+      when: deepin_area_screenshot_current.stdout != deepin_area_screenshot_shortcut
+      tags: [screenshot]
+
+    # O dde-daemon atual nao atualiza automaticamente os atalhos que foram
+    # alterados diretamente pelo GSettings. Atualizamos tambem o registro ativo
+    # do daemon usando a API atual de keybinding.
+    - name: Consultar o atalho de captura ativo no daemon do Deepin
+      ansible.builtin.command:
+        argv:
+          - busctl
+          - --user
+          - call
+          - org.deepin.dde.Keybinding1
+          - /org/deepin/dde/Keybinding1
+          - org.deepin.dde.Keybinding1
+          - GetShortcut
+          - s
+          - "{{ deepin_area_screenshot_id }}"
+      register: deepin_area_screenshot_active
+      changed_when: false
+      tags: [screenshot]
+
+    - name: Ativar Win Shift S no daemon do Deepin
+      ansible.builtin.command:
+        argv:
+          - busctl
+          - --user
+          - call
+          - org.deepin.dde.Keybinding1
+          - /org/deepin/dde/Keybinding1
+          - org.deepin.dde.Keybinding1
+          - ModifyHotkeys
+          - sas
+          - "{{ deepin_area_screenshot_id }}"
+          - '1'
+          - "{{ deepin_area_screenshot_accelerator }}"
+      when: deepin_area_screenshot_accelerator not in deepin_area_screenshot_active.stdout
+      tags: [screenshot]
+
+    - name: Confirmar o atalho de captura ativo no daemon do Deepin
+      ansible.builtin.command:
+        argv:
+          - busctl
+          - --user
+          - call
+          - org.deepin.dde.Keybinding1
+          - /org/deepin/dde/Keybinding1
+          - org.deepin.dde.Keybinding1
+          - GetShortcut
+          - s
+          - "{{ deepin_area_screenshot_id }}"
+      register: deepin_area_screenshot_active_after
+      changed_when: false
+      tags: [screenshot]
+
+    - name: Garantir que Win Shift S esteja ativo
+      ansible.builtin.assert:
+        that: deepin_area_screenshot_accelerator in deepin_area_screenshot_active_after.stdout
+        fail_msg: >-
+          O dde-daemon nao registrou Win+Shift+S para a captura de area.
+      tags: [screenshot]
+
+    - name: Informar como recarregar os atalhos
+      ansible.builtin.debug:
+        msg: >-
+          Win+Shift+S abre a captura de area com recorte e edicao do Deepin
+          imediatamente.
+          Encerre a sessao do Deepin e entre novamente para o dde-kwin
+          recarregar os demais atalhos.

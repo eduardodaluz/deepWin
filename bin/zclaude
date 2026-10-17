@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Executa o Claude Code pela API da Z.AI (GLM), sem alterar as
+# configuracoes do comando claude. Uso: zclaude [--setup]
+set -euo pipefail
+
+zai_key_file="${ZAI_API_KEY_FILE:-$HOME/.config/zai/api_key}"
+zai_api_key="${ZAI_API_KEY:-}"
+
+if [[ ${1:-} == '--setup' ]]; then
+  read -r -s -p 'Chave de API da Z.AI: ' zai_api_key
+  printf '\n'
+
+  if [[ -z $zai_api_key ]]; then
+    printf 'Nenhuma chave foi informada; configuracao cancelada.\n' >&2
+    exit 1
+  fi
+
+  umask 077
+  mkdir -p "$(dirname "$zai_key_file")"
+  printf '%s\n' "$zai_api_key" > "$zai_key_file"
+  printf 'Chave da Z.AI salva em %s. Agora execute: zclaude\n' "$zai_key_file"
+  exit 0
+fi
+
+if [[ -z $zai_api_key && -r $zai_key_file ]]; then
+  zai_api_key=$(<"$zai_key_file")
+fi
+
+if [[ -z $zai_api_key ]]; then
+  printf 'Chave da Z.AI nao encontrada. Execute: zclaude --setup\n' >&2
+  exit 1
+fi
+
+export ANTHROPIC_AUTH_TOKEN="$zai_api_key"
+export ANTHROPIC_BASE_URL='https://api.z.ai/api/anthropic'
+export API_TIMEOUT_MS='3000000'
+
+# Se existir uma instalação pinada, use-a isoladamente para contornar
+# regressões de compatibilidade do Claude Code com o endpoint da Z.AI.
+# Sem a cópia pinada, preserve o comportamento anterior e use `claude`.
+zclaude_pinned_bin="${ZCLAUDE_CLAUDE_BIN:-$HOME/.local/share/claude-glm/bin/claude}"
+if [[ -x $zclaude_pinned_bin ]]; then
+  export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude-glm}"
+  exec "$zclaude_pinned_bin" "$@"
+fi
+
+exec claude "$@"

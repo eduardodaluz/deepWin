@@ -1,0 +1,131 @@
+---
+# Instalar em simulação: ansible-playbook -i localhost, -c local deepin-clipboard.yml
+# Ativar colagem: acrescentar -e clipboard_autopaste_mode=paste
+# Iniciar com a sessão: acrescentar -e clipboard_autopaste_autostart=true
+# Rollback: acrescentar -e clipboard_autopaste_state=absent
+- name: Configurar colagem automatica do historico do Deepin
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    clipboard_autopaste_state: present
+    clipboard_autopaste_mode: dry-run
+    clipboard_autopaste_autostart: false
+    clipboard_autopaste_home: "{{ lookup('env', 'HOME') }}"
+    clipboard_autopaste_bin: "{{ clipboard_autopaste_home }}/.local/bin/deepin-clipboard-autopaste"
+    clipboard_autopaste_unit: "{{ clipboard_autopaste_home }}/.config/systemd/user/deepin-clipboard-autopaste.service"
+
+  tasks:
+    - name: Validar as opcoes
+      ansible.builtin.assert:
+        that:
+          - clipboard_autopaste_state in ['present', 'absent']
+          - clipboard_autopaste_mode in ['dry-run', 'paste']
+
+    - name: Verificar se o servico foi instalado
+      ansible.builtin.stat:
+        path: "{{ clipboard_autopaste_unit }}"
+      register: clipboard_autopaste_existing_unit
+
+    - name: Remover a automacao
+      when: clipboard_autopaste_state == 'absent'
+      block:
+        - name: Parar e desativar o servico
+          ansible.builtin.systemd_service:
+            name: deepin-clipboard-autopaste.service
+            scope: user
+            state: stopped
+            enabled: false
+          when: clipboard_autopaste_existing_unit.stat.exists
+
+        - name: Remover apenas os arquivos da automacao
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - "{{ clipboard_autopaste_unit }}"
+            - "{{ clipboard_autopaste_bin }}"
+
+        - name: Recarregar os servicos do usuario apos a remocao
+          ansible.builtin.systemd_service:
+            scope: user
+            daemon_reload: true
+
+    - name: Instalar a automacao
+      when: clipboard_autopaste_state == 'present'
+      block:
+        - name: Verificar as dependencias existentes sem instalar pacotes
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/python3
+              - -c
+              - |
+                import ctypes.util, shutil
+                import dbus
+                from gi.repository import GLib
+                assert ctypes.util.find_library('X11'), 'libX11 ausente'
+                assert ctypes.util.find_library('Xfixes'), 'libXfixes ausente'
+                assert shutil.which('xdotool'), 'xdotool ausente'
+          changed_when: false
+          check_mode: false
+
+        - name: Garantir os diretorios do usuario
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+            mode: '0755'
+          loop:
+            - "{{ clipboard_autopaste_home }}/.local/bin"
+            - "{{ clipboard_autopaste_home }}/.config/systemd/user"
+
+        - name: Instalar o script
+          ansible.builtin.copy:
+            src: bin/deepin-clipboard-autopaste
+            dest: "{{ clipboard_autopaste_bin }}"
+            mode: '0755'
+          register: clipboard_autopaste_script
+
+        - name: Instalar o servico da sessao grafica
+          ansible.builtin.copy:
+            dest: "{{ clipboard_autopaste_unit }}"
+            mode: '0644'
+            content: |
+              [Unit]
+              Description=Colar com Enter no historico do Deepin
+              After=dde-session-initialized.target
+              PartOf=dde-session-initialized.target
+              StartLimitIntervalSec=30
+              StartLimitBurst=3
+
+              [Service]
+              Type=simple
+              ExecCondition=/bin/sh -c 'test "$XDG_SESSION_TYPE" = x11 && test -n "$DISPLAY"'
+              ExecStart="{{ clipboard_autopaste_bin }}"{{ ' --dry-run' if clipboard_autopaste_mode == 'dry-run' else '' }}
+              Restart=on-failure
+              RestartSec=3
+              TimeoutStopSec=5
+              KillMode=mixed
+              Environment=PYTHONUNBUFFERED=1
+
+              [Install]
+              WantedBy=dde-session-initialized.target
+          register: clipboard_autopaste_service
+
+        - name: Aplicar o servico
+          ansible.builtin.systemd_service:
+            name: deepin-clipboard-autopaste.service
+            scope: user
+            daemon_reload: true
+            enabled: "{{ clipboard_autopaste_autostart | bool }}"
+            state: >-
+              {{ 'restarted' if (clipboard_autopaste_script.changed or
+                                 clipboard_autopaste_service.changed) else 'started' }}
+
+    - name: Informar o estado solicitado
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'Automacao removida; o historico original continua funcionando.'
+             if clipboard_autopaste_state == 'absent'
+             else 'Servico em modo ' + clipboard_autopaste_mode +
+                  '. Para parar: systemctl --user disable --now deepin-clipboard-autopaste.service' }}

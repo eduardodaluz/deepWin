@@ -1,0 +1,65 @@
+#!/usr/bin/python3
+"""Compila o DeepWin contra DTK/Qt instalados; usa headers oficiais em cache local."""
+import argparse
+from pathlib import Path
+import subprocess
+import sys
+
+root = Path(__file__).resolve().parents[1]
+build = root / '.build/deepwin'
+sdk = build / 'sdk'
+packages = build / 'packages'
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--fetch-sdk', action='store_true', help='baixar headers oficiais sem instalar pacotes')
+args = parser.parse_args()
+build.mkdir(parents=True, exist_ok=True)
+target = build / 'deepwin-ui'
+if (not args.fetch_sdk and target.exists() and target.stat().st_mtime >= max(
+        (root / 'gui/main.cpp').stat().st_mtime, Path(__file__).stat().st_mtime)):
+    print('DeepWin já compilado:', target)
+    sys.exit(0)
+if args.fetch_sdk:
+    packages.mkdir(parents=True, exist_ok=True)
+    names = ['libdtk6widget-dev', 'libdtk6core-dev', 'libdtk6gui-dev',
+             'libdtkcommon-dev', 'libdtk6log-dev', 'qt6-base-dev']
+    runtime = {'libdtk6widget-dev': 'libdtk6widget:amd64',
+               'libdtk6core-dev': 'libdtk6core:amd64',
+               'libdtk6gui-dev': 'libdtk6gui:amd64',
+               'libdtk6log-dev': 'libdtk6log:amd64',
+               'qt6-base-dev': 'libqt6core6:amd64'}
+    requests = []
+    for name in names:
+        if name in runtime:
+            version = subprocess.check_output(
+                ['dpkg-query', '-W', '-f=${Version}', runtime[name]], text=True).strip()
+            requests.append(name + '=' + version)
+        else:
+            requests.append(name)
+    subprocess.run(['apt-get', 'download', *requests], cwd=packages, check=True)
+    sdk.mkdir(parents=True, exist_ok=True)
+    for package in packages.glob('*.deb'):
+        subprocess.run(['dpkg-deb', '-x', str(package), str(sdk)], check=True)
+
+include = sdk / 'usr/include'
+multiarch = subprocess.check_output(['gcc', '-print-multiarch'], text=True).strip()
+if (include / 'dtk6/DWidget/DApplication').exists():
+    roots = [include / 'dtk6' / name for name in ('DWidget', 'DCore', 'DGui', 'DLog')]
+    qt = include / multiarch / 'qt6'
+    roots += [qt, *[qt / name for name in ('QtCore', 'QtGui', 'QtWidgets')]]
+    flags = [flag for path in roots for flag in ('-I', str(path))]
+    libraries = ['-l:' + name for name in ('libdtk6widget.so.6', 'libdtk6gui.so.6',
+                 'libdtk6core.so.6', 'libQt6Widgets.so.6', 'libQt6Gui.so.6', 'libQt6Core.so.6')]
+else:
+    import shlex
+    try:
+        flags = shlex.split(subprocess.check_output(
+            ['pkg-config', '--cflags', 'dtk6widget'], text=True))
+        libraries = shlex.split(subprocess.check_output(
+            ['pkg-config', '--libs', 'dtk6widget'], text=True))
+    except subprocess.CalledProcessError:
+        parser.error('SDK não encontrado. Execute novamente com --fetch-sdk.')
+
+subprocess.run(['g++', '-std=c++17', '-O2', '-fPIC', '-Wall', '-Wextra',
+                *flags, str(root / 'gui/main.cpp'), '-o', str(target), *libraries], check=True)
+print('DeepWin compilado:', target)
