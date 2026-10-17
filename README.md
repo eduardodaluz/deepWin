@@ -123,6 +123,14 @@ Os recursos configurados, os backups do painel e o runtime de versões do
 instala um serviço permanente: o controlador só executa enquanto a tela consulta
 ou altera uma configuração.
 
+### Distribuição em instaladores
+
+O [plano de distribuição](plano-distribuicao-deepwin.md) organiza as próximas
+entregas em três fases: **1. `.deb`**, **2. Linyaps/Linglong (`.uab`)** e
+**3. portátil (`.tar.xz`)**. O alvo inicial é Deepin 25 em amd64, com os mesmos
+ajustes e backups por usuário. Os instaladores ainda estão planejados;
+a instalação disponível continua sendo o playbook descrito acima.
+
 ### Atualização do nome anterior
 
 Feche a versão antiga antes de aplicar `deepwin.yml`. A instalação migra o
