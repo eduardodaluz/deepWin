@@ -52,7 +52,8 @@ em `$XDG_STATE_HOME/devedu.deepin-configs/originals.json`, com permissões restr
 (por padrão, `~/.local/state/devedu.deepin-configs/originals.json`).
 O botão **Restaurar alterações** retorna esses recursos aos valores anteriores
 ao uso do painel. Voltar manualmente ao estado inicial também limpa a respectiva
-entrada de restauração. A chave da Z.AI não é lida nem alterada.
+entrada de restauração. A chave da Z.AI não é lida nem alterada. A troca da versão do Claude tem seu
+próprio botão **Desfazer última troca**, descrito na seção do `zclaude`.
 
 O download de paisagens é independente da rotação nativa de imagens do Deepin.
 Se a rotação nativa estiver ativa, a tela informa essa condição. Desativar o
@@ -112,7 +113,8 @@ Para remover somente a GUI, feche a janela e execute:
 ansible-playbook -i localhost, -c local deepwin.yml -e deepwin_state=absent
 ```
 
-Os recursos configurados e os backups do painel são preservados. A GUI não
+Os recursos configurados, os backups do painel e o runtime de versões do
+`zclaude` são preservados. A GUI não
 instala um serviço permanente: o controlador só executa enquanto a tela consulta
 ou altera uma configuração.
 
@@ -332,8 +334,47 @@ ansible-playbook -i <host>, zclaude.yml
 
 Requisitos: `claude` instalado, uma chave da Z.AI e `~/.local/bin` no `PATH`.
 
-Se existir um executável em `~/.local/share/claude-glm/bin/claude`, o wrapper usa
-essa cópia isolada e o diretório de configuração `~/.claude-glm`. É possível
-escolher outro executável com `ZCLAUDE_CLAUDE_BIN`. O guia
-[de diagnóstico do erro 1210](fix-glm-claudecode-erro1210.md) descreve um contorno
-específico; instalar uma versão antiga não é requisito geral do projeto.
+### Selecionar a versão pela interface
+
+Abra **Ferramentas → Versão do Claude para zclaude**. Também é possível abrir
+essa seção diretamente com `deepwin --section tools`.
+
+- **Stable:** instala a versão indicada pelo canal `stable` do registro npm.
+  Ao abrir o `zclaude`, o DeepWin verifica atualizações em segundo plano no
+  máximo uma vez por dia. A nova versão passa a valer nas próximas execuções.
+  Se o download falhar, a versão instalada continua em uso.
+- **Versão fixa:** escolha um número da lista de versões publicadas ou digite
+  o número desejado, por exemplo `2.1.302`, e clique em **Aplicar**. O DeepWin
+  confere a versão antes de ativá-la. Ela permanece fixa até uma nova seleção.
+- **Claude do sistema:** usa o comando `claude` disponível no `PATH`, com a
+  política de atualização da própria instalação.
+
+**Buscar versões** atualiza a lista pelo registro oficial npm. Baixar versões
+requer Node.js/npm compatíveis com o pacote escolhido e acesso à internet.
+O [canal Stable é distinto de Latest](https://code.claude.com/docs/en/setup#configure-release-channel);
+selecioná-lo pode instalar uma versão anterior à mais recente publicada.
+A seleção não garante compatibilidade de todas as versões com a Z.AI.
+
+As versões baixadas ficam em
+`$XDG_DATA_HOME/devedu.deepin-configs/claude/versions/`
+(por padrão, `~/.local/share/devedu.deepin-configs/claude/versions/`). Cada uma
+fica em um diretório separado, preservando as versões usadas por sessões
+abertas e permitindo reaproveitar downloads. O DeepWin gerencia as atualizações
+dessas cópias; ele não atualiza a instalação principal do Claude.
+
+A seleção fica em `$XDG_STATE_HOME/devedu.deepin-configs/claude-selection.json`
+(por padrão, `~/.local/state/devedu.deepin-configs/claude-selection.json`).
+**Desfazer última troca** restaura a seleção imediatamente anterior, inclusive
+o comportamento anterior ao primeiro uso do seletor. Os executáveis baixados
+são preservados. Esse botão é independente de **Restaurar alterações**, que
+controla os switches do painel.
+
+Antes da primeira seleção, o wrapper usa a cópia em
+`~/.local/share/claude-glm/bin/claude` quando disponível, ou o `claude` do sistema.
+`ZCLAUDE_CLAUDE_BIN` tem precedência sobre o seletor; remova essa variável do
+ambiente para selecionar pela interface. As cópias isoladas continuam usando
+`~/.claude-glm` (ou `CLAUDE_CONFIG_DIR`) sem reescrever suas configurações ou a
+chave da Z.AI.
+
+O guia [de diagnóstico do erro 1210](fix-glm-claudecode-erro1210.md) descreve um
+contorno específico; instalar uma versão antiga não é requisito geral do projeto.

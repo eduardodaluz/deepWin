@@ -13,7 +13,15 @@ A versão de contorno registrada neste arquivo é a **2.1.263**. Essa referênci
 
 Referências: [relato no Reddit r/ZaiGLM](https://www.reddit.com/r/ZaiGLM/comments/1sejzvz/started_getting_api_error_400/), [linux.do (downgrade 2.1.263)](https://linux.do/t/topic/2877603), [códigos de erro da Z.AI](https://docs.z.ai/api-reference/api-code), [instalação do Claude Code](https://code.claude.com/docs/en/installation) e [pacote publicado no npm](https://www.npmjs.com/package/@anthropic-ai/claude-code?activeTab=versions).
 
-## Solução no Deepin
+## Seleção pela interface
+
+Com DeepWin instalado, use **Ferramentas → Versão do Claude para zclaude** para
+escolher uma versão específica ou voltar ao canal Stable. **Desfazer última
+troca** recupera a seleção anterior. O procedimento manual abaixo se aplica ao
+comportamento legado, antes de existir uma seleção ativa na GUI; instalar uma
+cópia em `claude-glm` não substitui uma versão selecionada pelo painel.
+
+## Procedimento manual no Deepin
 
 O procedimento instala a versão de contorno em um **diretório separado**, preservando o Claude principal. O wrapper `bin/zclaude`, instalado pelo playbook `zclaude.yml`, usa essa cópia quando disponível. A chave é obtida de `~/.config/zai/api_key` ou das variáveis documentadas no README.
 

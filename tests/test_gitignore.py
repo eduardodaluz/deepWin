@@ -24,6 +24,7 @@ class GitignoreTests(unittest.TestCase):
             'server.key', 'server.pem', '.aws/credentials', '.codex/auth.json',
             '.local/state/devedu.deepin-configs/originals.json',
             'state/controller.lock', 'backups/settings.json', 'test.log',
+            'claude-selection.json', 'claude-versions.lock', 'claude-versions.json',
         ]
         visible = [
             'gui/main.cpp', 'gui/backend.py', 'gui/preview.png',

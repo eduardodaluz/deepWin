@@ -85,6 +85,33 @@
             dest: "{{ deepwin_data }}/gui/backend.py"
             mode: '0644'
 
+        - name: Instalar o gerenciador de versoes do Claude
+          ansible.builtin.copy:
+            src: gui/claude_versions.py
+            dest: "{{ deepwin_data }}/gui/claude_versions.py"
+            mode: '0644'
+
+        - name: Atualizar o wrapper existente para integrar o seletor
+          ansible.builtin.stat:
+            path: "{{ deepwin_home }}/.local/bin/zclaude"
+          register: deepwin_zclaude_existing
+
+        - name: Identificar o wrapper do projeto
+          ansible.builtin.command:
+            argv: [head, -n, '3', "{{ deepwin_home }}/.local/bin/zclaude"]
+          register: deepwin_zclaude_header
+          changed_when: false
+          when: deepwin_zclaude_existing.stat.exists and not deepwin_zclaude_existing.stat.islnk
+
+        - name: Atualizar o wrapper quando ja estiver instalado
+          ansible.builtin.copy:
+            src: bin/zclaude
+            dest: "{{ deepwin_home }}/.local/bin/zclaude"
+            mode: '0755'
+          when: >-
+            deepwin_zclaude_existing.stat.exists and not deepwin_zclaude_existing.stat.islnk
+            and 'Executa o Claude Code pela API da Z.AI' in (deepwin_zclaude_header.stdout | default(''))
+
         - name: Instalar o recurso do wrapper sem ativar o comando
           ansible.builtin.copy:
             src: bin/zclaude
@@ -128,7 +155,10 @@
         path: "{{ item }}"
         state: absent
       loop:
-        - "{{ deepwin_data }}"
+        # O helper e as versões do Claude são usados pelo zclaude mesmo sem GUI.
+        - "{{ deepwin_data }}/deepwin-ui"
+        - "{{ deepwin_data }}/gui/backend.py"
+        - "{{ deepwin_data }}/bin/zclaude"
         - "{{ deepwin_home }}/.local/bin/deepwin"
         - "{{ deepwin_data_home }}/applications/{{ deepwin_app_id }}.desktop"
 

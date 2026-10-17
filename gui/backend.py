@@ -11,7 +11,12 @@ import os
 from pathlib import Path
 import stat
 import subprocess
+import sys
 import tempfile
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from claude_versions import ClaudeVersions
 
 
 SCREENSHOT_ID = 'org.deepin.dde.keybinding.shortcut.app.screenshot'
@@ -387,8 +392,13 @@ class Manager:
             item.update(category=category, title=title, description=description)
             features.append(item)
         originals = self.load_state()
+        try:
+            claude = ClaudeVersions(home=self.home, state_dir=self.state_dir).status()
+        except Exception as error:
+            claude = {'error': str(error)}
         return {'features': features, 'restore_count': len(originals),
-                'restore_titles': [row[2] for row in FEATURES if row[0] in originals]}
+                'restore_titles': [row[2] for row in FEATURES if row[0] in originals],
+                'claude': claude}
 
 
 def main():
@@ -396,6 +406,10 @@ def main():
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('status')
     sub.add_parser('migrate-state')
+    sub.add_parser('claude-list')
+    select = sub.add_parser('claude-select')
+    select.add_argument('version')
+    sub.add_parser('claude-restore')
     change = sub.add_parser('set')
     change.add_argument('feature', choices=[row[0] for row in FEATURES])
     change.add_argument('enabled', choices=('on', 'off'))
@@ -409,8 +423,20 @@ def main():
                               'message': 'Estado migrado para o DeepWin.' if changed else 'Nenhuma migração pendente.'},
                              ensure_ascii=False))
             return 0
-        manager = Manager()
         message = ''
+        versions = ClaudeVersions()
+        if args.command == 'claude-list':
+            versions.catalog(refresh=True)
+            message = 'Lista de versões atualizada.'
+        elif args.command == 'claude-select':
+            if os.environ.get('ZCLAUDE_CLAUDE_BIN'):
+                raise ConfigError('Remova ZCLAUDE_CLAUDE_BIN do ambiente para usar o seletor.')
+            versions.choose(args.version)
+            message = 'Versão selecionada. A mudança vale para novas execuções do zclaude.'
+        elif args.command == 'claude-restore':
+            versions.restore()
+            message = 'Seleção anterior do Claude restaurada.'
+        manager = Manager()
         if args.command == 'set':
             manager.change(args.feature, args.enabled == 'on')
             message = 'Alteração aplicada.'

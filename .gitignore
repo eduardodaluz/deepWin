@@ -141,6 +141,9 @@ id_ed25519
 /backups/
 originals.json
 controller.lock
+claude-selection.json
+claude-versions.lock
+claude-versions.json
 *.bak
 *.backup
 

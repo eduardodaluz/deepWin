@@ -1,4 +1,5 @@
 #include <DApplication>
+#include <DComboBox>
 #include <DFrame>
 #include <DLabel>
 #include <DMainWindow>
@@ -8,6 +9,7 @@
 #include <DSwitchButton>
 #include <DTitlebar>
 #include <QCloseEvent>
+#include <QCompleter>
 #include <QButtonGroup>
 #include <QCommandLineParser>
 #include <QDateTime>
@@ -38,8 +40,9 @@ struct FeatureRow {
 
 class SettingsWindow : public DMainWindow {
 public:
-    SettingsWindow(QString controller, bool smoke, QString screenshot)
+    SettingsWindow(QString controller, bool smoke, QString screenshot, int section)
         : backend(std::move(controller)), screenshotPath(std::move(screenshot)), smokeTest(smoke) {
+        currentCategory = section;
         setWindowTitle("DeepWin");
         setWindowIcon(QIcon::fromTheme("preferences-system"));
         setMinimumSize(800, 620);
@@ -62,7 +65,7 @@ public:
             auto *button = new DPushButton(names[i]);
             button->setIcon(QIcon::fromTheme(icons[i]));
             button->setCheckable(true);
-            button->setChecked(i == 0);
+            button->setChecked(i == section);
             button->setFixedHeight(44);
             navigation->addButton(button);
             sideLayout->addWidget(button);
@@ -119,6 +122,7 @@ public:
         rowsLayout->setContentsMargins(0, 0, 6, 0);
         rowsLayout->setSpacing(12);
         rowsLayout->addStretch();
+        makeClaudeControls();
         scroll->setWidget(content);
         layout->addWidget(scroll, 1);
 
@@ -192,16 +196,24 @@ private:
     int currentCategory = 0;
     DLabel *pageTitle, *summary, *message, *updated;
     DPushButton *refreshButton, *restoreButton;
+    DFrame *claudeFrame;
+    DLabel *claudeStatus, *claudeNote;
+    DComboBox *claudeChoice;
+    DPushButton *claudeApply, *claudeFetch, *claudeUndo;
+    bool catalogRequested = false;
+    QString claudeSignature;
     DSpinner *spinner;
 
     void run(const QStringList &arguments) {
         if (process.state() != QProcess::NotRunning) return;
-        busyAction = arguments[0] != "status";
+        busyAction = arguments[0] != "status" && arguments[0] != "claude-list";
         timedOut = false;
-        if (busyAction) message->setText("Aplicando alteração…");
+        if (busyAction) message->setText(arguments[0] == "claude-select" ?
+            "Preparando a versão do Claude… Aguarde a conclusão do download e da instalação." : "Aplicando alteração…");
+        else if (arguments[0] == "claude-list") message->setText("Consultando versões disponíveis…");
         setBusy(true);
         process.start("/usr/bin/python3", QStringList{backend} + arguments);
-        deadline.start(25000);
+        deadline.start(arguments[0] == "claude-select" ? 300000 : 25000);
     }
 
     void setBusy(bool value) {
@@ -211,6 +223,108 @@ private:
         refreshButton->setEnabled(!value);
         restoreButton->setEnabled(!value && model["restore_count"].toInt() > 0);
         for (auto &row : rows) row.toggle->setEnabled(!value && row.available);
+        const auto claude = model["claude"].toObject();
+        const bool selectable = !value && !claude["override"].toBool() && !claude.contains("error");
+        claudeChoice->setEnabled(selectable);
+        claudeApply->setEnabled(selectable);
+        claudeFetch->setEnabled(!value);
+        claudeUndo->setEnabled(!value && claude["can_restore"].toBool());
+    }
+
+    void makeClaudeControls() {
+        claudeFrame = new DFrame;
+        claudeFrame->setFrameRounded(true);
+        auto *layout = new QVBoxLayout(claudeFrame);
+        layout->setContentsMargins(18, 16, 18, 16);
+        auto *title = new DLabel("Versão do Claude para zclaude");
+        QFont font = title->font(); font.setWeight(QFont::DemiBold); title->setFont(font);
+        layout->addWidget(title);
+        claudeStatus = new DLabel("Consultando versão…");
+        claudeStatus->setWordWrap(true);
+        layout->addWidget(claudeStatus);
+        claudeNote = new DLabel;
+        claudeNote->setWordWrap(true);
+        claudeNote->setForegroundRole(Dtk::Gui::DPalette::TextTips);
+        layout->addWidget(claudeNote);
+        auto *choiceRow = new QHBoxLayout;
+        claudeChoice = new DComboBox;
+        claudeChoice->setObjectName("claude-version");
+        claudeChoice->setAccessibleName("Canal ou versão do Claude");
+        claudeChoice->setEditable(true);
+        claudeChoice->setInsertPolicy(QComboBox::NoInsert);
+        claudeChoice->setMaxVisibleItems(14);
+        claudeChoice->setMinimumWidth(180);
+        claudeChoice->completer()->setCompletionMode(QCompleter::PopupCompletion);
+        claudeChoice->completer()->setFilterMode(Qt::MatchContains);
+        choiceRow->addWidget(claudeChoice, 1);
+        claudeApply = new DPushButton("Aplicar");
+        claudeApply->setObjectName("claude-apply");
+        choiceRow->addWidget(claudeApply);
+        layout->addLayout(choiceRow);
+        auto *actions = new QHBoxLayout;
+        claudeFetch = new DPushButton("Buscar versões");
+        claudeUndo = new DPushButton("Desfazer última troca");
+        claudeUndo->setObjectName("claude-undo");
+        actions->addWidget(claudeFetch);
+        actions->addWidget(claudeUndo);
+        actions->addStretch();
+        layout->addLayout(actions);
+        rowsLayout->insertWidget(rowsLayout->count() - 1, claudeFrame);
+        connect(claudeFetch, &DPushButton::clicked, this, [this] { run({"claude-list"}); });
+        connect(claudeUndo, &DPushButton::clicked, this, [this] { run({"claude-restore"}); });
+        connect(claudeApply, &DPushButton::clicked, this, [this] {
+            const auto text = claudeChoice->currentText().trimmed();
+            const auto choice = text == claudeChoice->itemText(claudeChoice->currentIndex()) ?
+                claudeChoice->currentData().toString() : text;
+            if (choice == "legacy" || choice.isEmpty()) {
+                message->setText("Selecione Stable, Claude do sistema ou um número de versão.");
+                return;
+            }
+            run({"claude-select", choice});
+        });
+    }
+
+    void renderClaude() {
+        const auto claude = model["claude"].toObject();
+        const auto mode = claude["mode"].toString();
+        const auto version = claude["version"].toString();
+        const auto stable = claude["stable"].toString();
+        const auto desired = mode == "pinned" ? version : mode;
+        const QString signature = mode + ":" + version + ":" + stable + ":" +
+            QString::fromUtf8(QJsonDocument(claude["versions"].toArray()).toJson(QJsonDocument::Compact));
+        if (signature != claudeSignature) {
+            claudeSignature = signature;
+            // Preservar a escolha e o texto digitado durante a atualização periódica.
+            const auto pendingText = claudeChoice->currentText();
+            const auto pendingChoice = claudeChoice->currentData().toString();
+            const bool edited = pendingText != claudeChoice->itemText(claudeChoice->currentIndex());
+            const bool first = claudeChoice->count() == 0;
+            const QSignalBlocker blocker(claudeChoice);
+            claudeChoice->clear();
+            if (mode == "legacy") claudeChoice->addItem("Configuração anterior" +
+                (version.isEmpty() ? QString() : " · " + version), "legacy");
+            claudeChoice->addItem(stable.isEmpty() ? "Stable · atualização automática" :
+                "Stable · " + stable + " · atualização automática", "stable");
+            claudeChoice->addItem("Claude do sistema", "system");
+            for (const auto &value : claude["versions"].toArray())
+                claudeChoice->addItem(value.toString(), value.toString());
+            if (mode == "pinned" && claudeChoice->findData(version) < 0)
+                claudeChoice->addItem(version, version);
+            int index = claudeChoice->findData(first ? desired : pendingChoice);
+            if (index < 0) index = claudeChoice->findData(desired);
+            if (index >= 0) claudeChoice->setCurrentIndex(index);
+            if (!first && edited && !pendingText.isEmpty()) claudeChoice->setEditText(pendingText);
+        }
+        QString label;
+        if (mode == "stable") label = "Canal Stable · instalada: " + version;
+        else if (mode == "pinned") label = "Versão fixa: " + version;
+        else if (mode == "system") label = "Usando o Claude do sistema";
+        else label = version.isEmpty() ? "Usando a configuração anterior do zclaude" : "Configuração anterior · " + version;
+        claudeStatus->setText(claude.contains("error") ? claude["error"].toString() : label);
+        QString note = "A mudança vale ao abrir o zclaude novamente. Stable verifica atualizações em segundo plano uma vez por dia; versões fixas permanecem selecionadas.";
+        if (claude["override"].toBool()) note = "ZCLAUDE_CLAUDE_BIN está definido no ambiente. Remova essa substituição para selecionar pela interface.";
+        if (!claude["update_error"].toString().isEmpty()) note += "\nA última atualização falhou; a versão instalada foi mantida.";
+        claudeNote->setText(note);
     }
 
     void makeRow(const QJsonObject &feature) {
@@ -241,7 +355,7 @@ private:
         toggle->setObjectName(id);
         toggle->setAccessibleName(feature["title"].toString());
         layout->addWidget(toggle);
-        rowsLayout->insertWidget(rowsLayout->count() - 1, frame);
+        rowsLayout->insertWidget(rowsLayout->indexOf(claudeFrame), frame);
         rows.insert(id, {frame, status, note, toggle, feature["category"].toString(), false});
         connect(toggle, &QAbstractButton::clicked, this, [this, id](bool checked) {
             run({"set", id, checked ? "on" : "off"});
@@ -273,6 +387,7 @@ private:
         restoreButton->setText(restorable ? QString("Restaurar alterações (%1)").arg(restorable) : "Restaurar alterações");
         restoreButton->setEnabled(!busy && restorable > 0);
         updated->setText("Atualizado às " + QDateTime::currentDateTime().toString("HH:mm:ss"));
+        renderClaude();
         filterRows();
     }
 
@@ -280,6 +395,11 @@ private:
         const int selected = currentCategory;
         const QStringList titles = {"Seus recursos", "Produtividade", "Aparência", "Ferramentas"};
         pageTitle->setText(titles.value(selected, titles[0]));
+        claudeFrame->setVisible(selected == 0 || selected == 3);
+        if (selected == 3 && !smokeTest && !catalogRequested && !busy) {
+            catalogRequested = true;
+            QTimer::singleShot(0, this, [this] { run({"claude-list"}); });
+        }
         for (auto &row : rows) row.frame->setVisible(selected == 0 ||
             (selected == 1 && (row.category == "Produtividade" || row.category == "Atalhos")) ||
             (selected == 2 && row.category == "Aparência") ||
@@ -304,7 +424,8 @@ private:
             firstResult = false;
             if (smokeTest || !screenshotPath.isEmpty()) {
                 QTimer::singleShot(600, this, [this, ok] {
-                    bool valid = ok && rows.size() == 8;
+                    bool valid = ok && rows.size() == 8 &&
+                        claudeChoice->findData("stable") >= 0 && claudeChoice->findData("system") >= 0;
                     for (const auto &row : rows) valid = valid && row.available;
                     if (!screenshotPath.isEmpty()) valid = grab().save(screenshotPath) && valid;
                     if (smokeTest) {
@@ -333,11 +454,15 @@ int main(int argc, char **argv) {
     parser.addVersionOption();
     parser.addOption({"backend", "Caminho do controlador Python.", "arquivo"});
     parser.addOption({"smoke-test", "Consultar recursos, validar a GUI e sair, sem alterar configurações."});
+    parser.addOption({"section", "Seção inicial: overview, productivity, appearance ou tools.", "seção", "overview"});
     parser.addOption({"screenshot", "Salvar uma captura da janela.", "arquivo"});
     parser.process(app);
     if (!parser.isSet("backend")) parser.showHelp(1);
     if (!parser.isSet("smoke-test") && !app.setSingleInstance("devedu.deepin-configs")) return 0;
-    SettingsWindow window(parser.value("backend"), parser.isSet("smoke-test"), parser.value("screenshot"));
+    const QStringList sections = {"overview", "productivity", "appearance", "tools"};
+    const int section = sections.indexOf(parser.value("section"));
+    if (section < 0) parser.showHelp(1);
+    SettingsWindow window(parser.value("backend"), parser.isSet("smoke-test"), parser.value("screenshot"), section);
     QObject::connect(&app, &DApplication::newInstanceStarted, &window, [&window] {
         window.showNormal(); window.raise(); window.activateWindow();
     });

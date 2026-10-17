@@ -31,17 +31,34 @@ if [[ -z $zai_api_key ]]; then
   exit 1
 fi
 
+# Resolver antes de exportar a chave: consultas e downloads não precisam dela.
+project_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+version_helper="$project_dir/gui/claude_versions.py"
+if [[ ! -f $version_helper ]]; then
+  version_helper="${XDG_DATA_HOME:-$HOME/.local/share}/devedu.deepin-configs/gui/claude_versions.py"
+fi
+claude_bin='claude'
+managed='external'
+if [[ -f $version_helper ]]; then
+  resolved=$(/usr/bin/python3 "$version_helper" resolve) || exit 1
+  claude_bin=${resolved%$'\n'*}
+  managed=${resolved##*$'\n'}
+else
+  # Compatibilidade com instalações anteriores ao seletor de versões.
+  legacy_bin="${ZCLAUDE_CLAUDE_BIN:-$HOME/.local/share/claude-glm/bin/claude}"
+  if [[ -x $legacy_bin ]]; then
+    claude_bin=$legacy_bin
+  fi
+fi
+if [[ $claude_bin != 'claude' ]]; then
+  export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude-glm}"
+fi
+if [[ $managed == 'managed' ]]; then
+  # DeepWin atualiza Stable em diretórios separados; versões fixas ficam intactas.
+  export DISABLE_AUTOUPDATER=1
+  export DISABLE_UPDATES=1
+fi
 export ANTHROPIC_AUTH_TOKEN="$zai_api_key"
 export ANTHROPIC_BASE_URL='https://api.z.ai/api/anthropic'
 export API_TIMEOUT_MS='3000000'
-
-# Se existir uma instalação pinada, use-a isoladamente para contornar
-# regressões de compatibilidade do Claude Code com o endpoint da Z.AI.
-# Sem a cópia pinada, preserve o comportamento anterior e use `claude`.
-zclaude_pinned_bin="${ZCLAUDE_CLAUDE_BIN:-$HOME/.local/share/claude-glm/bin/claude}"
-if [[ -x $zclaude_pinned_bin ]]; then
-  export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude-glm}"
-  exec "$zclaude_pinned_bin" "$@"
-fi
-
-exec claude "$@"
+exec "$claude_bin" "$@"

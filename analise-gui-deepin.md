@@ -60,6 +60,26 @@ confere a associação real para ignorar rótulos traduzidos de atalho ausente.
 Ao guardar ou recuperar o wrapper, o controlador preserva conteúdo, permissões
 e links simbólicos, inclusive entre sistemas de arquivos diferentes.
 
+## Versões do Claude para zclaude
+
+A seção Ferramentas inclui um seletor DTK de canal ou versão. O controlador
+consulta as versões finais publicadas no registro oficial npm, ordenadas da
+mais recente para a mais antiga. Uma versão é instalada em um diretório
+separado, validada por `--version` e só então ativada por uma seleção JSON
+atômica. Um bloqueio de arquivo serializa instalações, atualizações e rollback.
+
+Stable é resolvido pelo tag `stable`, sem confundi-lo com `latest`. O wrapper
+agenda uma verificação em segundo plano ao ser iniciado, no máximo uma vez por
+dia. As atualizações preservam o último executável funcional e a seleção de
+rollback. Versões fixas não recebem essas atualizações. As cópias gerenciadas
+executam com o atualizador próprio do Claude desabilitado.
+
+O botão de desfazer restaura a seleção anterior. Ele é separado da restauração
+dos switches. A instalação principal, a chave da Z.AI e os arquivos de
+configuração do Claude não são reescritos. Downloads e verificações usam um
+ambiente sem as variáveis de credenciais. Remover a GUI preserva o helper e os
+executáveis usados pelo `zclaude`.
+
 ## Verificação
 
 Os testes unitários cobrem decisões de colagem, atalhos, backups, restauração,

@@ -7,10 +7,23 @@
   gather_facts: true
 
   vars:
+    zclaude_data_home: "{{ ansible_env.XDG_DATA_HOME | default(ansible_user_dir + '/.local/share', true) }}"
     zclaude_bin_dir: "{{ ansible_user_dir }}/.local/bin"
     zclaude_bin: "{{ zclaude_bin_dir }}/zclaude"
 
   tasks:
+    - name: Criar o diretorio do gerenciador de versoes
+      ansible.builtin.file:
+        path: "{{ zclaude_data_home }}/devedu.deepin-configs/gui"
+        state: directory
+        mode: '0755'
+
+    - name: Instalar o gerenciador de versoes do Claude
+      ansible.builtin.copy:
+        src: gui/claude_versions.py
+        dest: "{{ zclaude_data_home }}/devedu.deepin-configs/gui/claude_versions.py"
+        mode: '0644'
+
     - name: Garantir que o diretorio de binarios do usuario existe
       ansible.builtin.file:
         path: "{{ zclaude_bin_dir }}"
