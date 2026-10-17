@@ -72,9 +72,35 @@ class ManagerTests(unittest.TestCase):
 
     def test_status_reports_real_resources_without_writing_files(self):
         result = self.manager.status()
-        self.assertEqual(len(result['features']), 9)
+        self.assertEqual(len(result['features']), 10)
         self.assertFalse(self.state.exists())
         self.assertFalse(self.manager.feature_status('zclaude')['enabled'])
+
+    def test_calculator_can_be_restored_without_changing_other_features(self):
+        class FakeCalculator:
+            enabled = False
+            def capture(self): return {'enabled': self.enabled}
+            def configure(self, enabled): self.enabled = enabled
+            def status(self): return {'available': True, 'enabled': self.enabled}
+        self.manager.calculator_decimal = FakeCalculator()
+        previous = self.manager.capture('clipboard')
+        self.manager.change('calculator_decimal', True)
+        self.assertTrue(self.manager.feature_status('calculator_decimal')['enabled'])
+        self.assertEqual(self.manager.load_state()['calculator_decimal'], {'enabled': False})
+        self.manager.restore('calculator_decimal')
+        self.assertFalse(self.manager.feature_status('calculator_decimal')['enabled'])
+        self.assertEqual(self.manager.capture('clipboard'), previous)
+        self.assertEqual(self.manager.load_state(), {})
+
+    def test_failed_calculator_activation_rolls_back(self):
+        class FakeCalculator:
+            def capture(self): return {'enabled': False}
+            def configure(self, enabled):
+                if enabled: raise backend.ConfigError('Test failure')
+        self.manager.calculator_decimal = FakeCalculator()
+        with self.assertRaises(backend.ConfigError):
+            self.manager.change('calculator_decimal', True)
+        self.assertEqual(self.manager.load_state(), {})
 
     def test_dock_preview_is_backed_up_and_restored_independently(self):
         class FakeDock:

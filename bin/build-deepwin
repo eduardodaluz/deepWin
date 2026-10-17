@@ -3,6 +3,7 @@
 import argparse
 from pathlib import Path
 import subprocess
+import shutil
 import sys
 
 root = Path(__file__).resolve().parents[1]
@@ -15,19 +16,23 @@ parser.add_argument('--fetch-sdk', action='store_true', help='baixar headers ofi
 args = parser.parse_args()
 build.mkdir(parents=True, exist_ok=True)
 target = build / 'deepwin-ui'
-if (not args.fetch_sdk and target.exists() and target.stat().st_mtime >= max(
-        (root / 'gui/main.cpp').stat().st_mtime, Path(__file__).stat().st_mtime)):
+plugin = build / 'qt6/plugins/generic/libdeepwin-calculator.so'
+calculator_sources = [root / 'gui/calculator_decimal.cpp', root / 'gui/calculator_decimal.json']
+if (not args.fetch_sdk and target.exists() and plugin.exists() and
+        min(target.stat().st_mtime, plugin.stat().st_mtime) >= max(
+        (root / 'gui/main.cpp').stat().st_mtime, Path(__file__).stat().st_mtime,
+        *[path.stat().st_mtime for path in calculator_sources])):
     print('DeepWin já compilado:', target)
     sys.exit(0)
 if args.fetch_sdk:
     packages.mkdir(parents=True, exist_ok=True)
     names = ['libdtk6widget-dev', 'libdtk6core-dev', 'libdtk6gui-dev',
-             'libdtkcommon-dev', 'libdtk6log-dev', 'qt6-base-dev']
+             'libdtkcommon-dev', 'libdtk6log-dev', 'qt6-base-dev', 'qt6-base-dev-tools']
     runtime = {'libdtk6widget-dev': 'libdtk6widget:amd64',
                'libdtk6core-dev': 'libdtk6core:amd64',
                'libdtk6gui-dev': 'libdtk6gui:amd64',
                'libdtk6log-dev': 'libdtk6log:amd64',
-               'qt6-base-dev': 'libqt6core6:amd64'}
+               'qt6-base-dev': 'libqt6core6:amd64', 'qt6-base-dev-tools': 'libqt6core6:amd64'}
     requests = []
     for name in names:
         if name in runtime:
@@ -62,4 +67,15 @@ else:
 
 subprocess.run(['g++', '-std=c++17', '-O2', '-fPIC', '-Wall', '-Wextra',
                 *flags, str(root / 'gui/main.cpp'), '-o', str(target), *libraries], check=True)
+moc = next((str(path) for path in (sdk / 'usr/lib/qt6/libexec/moc',
+    Path('/usr/lib/qt6/libexec/moc')) if path.is_file()), shutil.which('moc6'))
+if not moc:
+    parser.error('moc do Qt 6 não encontrado. Execute novamente com --fetch-sdk.')
+subprocess.run([moc, *flags, str(calculator_sources[0]), '-o',
+                str(build / 'calculator_decimal.moc')], check=True)
+plugin.parent.mkdir(parents=True, exist_ok=True)
+subprocess.run(['g++', '-std=c++17', '-O2', '-fPIC', '-shared', '-Wall', '-Wextra',
+                *flags, '-I', str(build), str(calculator_sources[0]), '-o', str(plugin),
+                '-l:libQt6Gui.so.6', '-l:libQt6Core.so.6'], check=True)
 print('DeepWin compilado:', target)
+print('Filtro decimal Qt compilado:', plugin)

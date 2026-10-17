@@ -1,0 +1,22 @@
+#!/bin/sh
+# Launcher da calculadora: o plugin Qt fica restrito a este aplicativo.
+set -eu
+case "$0" in
+    /*) launcher=$0 ;;
+    *) launcher=$(command -v -- "$0") ;;
+esac
+resource_dir=$(CDPATH= cd -- "$(dirname -- "$launcher")/.." && pwd)
+plugin_dir=$resource_dir/qt6/plugins
+flag=$resource_dir/calculator-enabled.json
+
+# Executar dentro do Linglong preserva os plugins de tema e integração nativos.
+# Os caminhos são argumentos posicionais, nunca interpolados no código do shell.
+setup='plugin_dir=$1; flag=$2; shift 2
+export QT_PLUGIN_PATH="$plugin_dir${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
+export QT_QPA_GENERIC_PLUGINS="deepwin-calculator:$flag${QT_QPA_GENERIC_PLUGINS:+,$QT_QPA_GENERIC_PLUGINS}"
+exec deepin-calculator "$@"'
+
+if command -v deepin-calculator >/dev/null 2>&1; then
+    exec /bin/sh -c "$setup" deepwin "$plugin_dir" "$flag" "$@"
+fi
+exec /usr/bin/ll-cli run org.deepin.calculator -- /bin/sh -c "$setup" deepwin "$plugin_dir" "$flag" "$@"

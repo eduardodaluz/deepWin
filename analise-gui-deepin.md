@@ -21,6 +21,7 @@ integrações; ela não indica que os recursos estejam instalados ou habilitados
 | Recurso | Integração | Habilitar / desabilitar |
 | --- | --- | --- |
 | Colar ao confirmar no histórico | `deepin-clipboard-autopaste.service` | Iniciar e habilitar / parar e desabilitar o serviço do usuário |
+| Vírgula decimal | Plugin Qt 6, filtro dentro da calculadora e sobreposição do launcher por usuário | Carregar na próxima abertura pelo menu / remover a flag e o launcher gerenciado |
 | Próxima área de trabalho | KGlobalAccel, Ctrl+Win+→ | Adicionar / remover apenas essa combinação |
 | Área de trabalho anterior | KGlobalAccel, Ctrl+Win+← | Adicionar / remover apenas essa combinação |
 | Janela no próximo monitor | KGlobalAccel, Shift+Win+→ | Adicionar / remover apenas essa combinação |
@@ -87,7 +88,7 @@ Os testes unitários cobrem decisões de colagem, atalhos, backups, restauraçã
 migração de estado e movimentação do wrapper. Eles usam adaptadores simulados
 para as configurações do sistema. Os comandos estão no README.
 
-O modo `--smoke-test` consulta os nove recursos sem alterá-los; seu resultado
+O modo `--smoke-test` consulta os dez recursos sem alterá-los; seu resultado
 depende de essas integrações estarem disponíveis na sessão. O teste gráfico
 `tests/verify_configs_gui.py` exige sessão desbloqueada, GUI fechada, colagem
 ativa e nenhum backup pendente. Ele desativa a colagem e usa o diálogo de

@@ -18,6 +18,7 @@ import tempfile
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from claude_versions import ClaudeVersions
 from dock_preview import DockPreview
+from calculator_decimal import CalculatorDecimal
 
 
 SCREENSHOT_ID = 'org.deepin.dde.keybinding.shortcut.app.screenshot'
@@ -36,6 +37,8 @@ SERVICES = {
 FEATURES = [
     ('clipboard', 'Produtividade', 'Colar ao confirmar no histórico',
      'Win + V → selecione um item → Enter. Reconhece terminais automaticamente.'),
+    ('calculator_decimal', 'Produtividade', 'Vírgula decimal na calculadora',
+     'Aceita a vírgula como separador decimal. Após ativar, feche a calculadora e reabra pelo menu.'),
     ('desktop_previous', 'Atalhos', 'Área de trabalho anterior', 'Ctrl + Win + ←'),
     ('desktop_next', 'Atalhos', 'Próxima área de trabalho', 'Ctrl + Win + →'),
     ('screen_previous', 'Atalhos', 'Janela no monitor anterior', 'Shift + Win + ←'),
@@ -217,6 +220,7 @@ class Manager:
         self.state_file = self.state_dir / 'originals.json'
         self.native = native if native is not None else Native()
         self.dock_preview = DockPreview(home=self.home)
+        self.calculator_decimal = CalculatorDecimal(home=self.home)
 
     def load_state(self):
         if not self.state_file.exists():
@@ -242,6 +246,8 @@ class Manager:
             yield
 
     def capture(self, feature):
+        if feature == 'calculator_decimal':
+            return self.calculator_decimal.capture()
         if feature == 'dock_preview':
             return self.dock_preview.capture()
         if feature in SERVICES:
@@ -260,6 +266,9 @@ class Manager:
         raise ConfigError('Recurso desconhecido.')
 
     def restore_value(self, feature, value):
+        if feature == 'calculator_decimal':
+            self.calculator_decimal.configure(value['enabled'])
+            return
         if feature == 'dock_preview':
             self.dock_preview.configure(value['enabled'])
             return
@@ -281,6 +290,9 @@ class Manager:
                 atomic_bytes(self.wrapper, base64.b64decode(value['data']), value['mode'])
 
     def apply(self, feature, enabled):
+        if feature == 'calculator_decimal':
+            self.calculator_decimal.configure(enabled)
+            return
         if feature == 'dock_preview':
             self.dock_preview.configure(enabled)
             return
@@ -376,6 +388,10 @@ class Manager:
                     item['status'] = 'Ativo em simulação · Não envia colagem'
                 if feature == 'wallpaper' and self.native.native_slideshow():
                     item['note'] = 'A rotação de imagens do Deepin também está ativa e é independente deste download.'
+            elif feature == 'calculator_decimal':
+                values = self.calculator_decimal.status()
+                item.update(values)
+                item['status'] = 'Vírgula decimal habilitada' if values['enabled'] else 'Teclado padrão da calculadora'
             elif feature == 'dock_preview':
                 values = self.dock_preview.status()
                 item.update(values)

@@ -9,9 +9,10 @@ em [analise-gui-deepin.md](analise-gui-deepin.md).
 O comando de abertura é `deepwin` e o identificador do aplicativo/pacote é
 `devedu.deepin-configs`. A entrada no menu usa `devedu.deepin-configs.desktop`.
 
-Ele permite habilitar e desabilitar nove recursos:
+Ele permite habilitar e desabilitar dez recursos:
 
 - Colagem ao confirmar um item do histórico.
+- Vírgula como separador decimal na calculadora Deepin.
 - Quatro combinações para áreas de trabalho e monitores.
 - Captura de área com Win+Shift+S.
 - Miniaturas ao clicar em um grupo de janelas na barra de tarefas.
@@ -22,8 +23,8 @@ Ele permite habilitar e desabilitar nove recursos:
 
 A interface requer uma sessão gráfica do Deepin, os runtimes DTK 6 Widgets e
 Qt 6 Widgets, Python 3 com `python3-dbus` e `python3-gi`, além de Ansible.
-Para compilar, são necessários `g++`, `pkg-config` e os headers DTK/Qt;
-o instalador pode baixar esses headers com `apt-get` para um cache local.
+Para compilar, são necessários `g++`, `pkg-config`, os headers DTK/Qt e o `moc` do Qt 6;
+o instalador pode baixar esses headers e ferramentas com `apt-get` para um cache local.
 Essas dependências precisam estar disponíveis antes da instalação.
 A colagem automática requer uma sessão X11; cada recurso tem requisitos próprios,
 descritos nas seções abaixo. Inclua `~/.local/bin` no `PATH` para usar os comandos
@@ -68,6 +69,7 @@ indisponíveis. Para preparar cada integração:
 | --- | --- |
 | Colagem automática | Aplicar `deepin-clipboard.yml`; por padrão, inicia em simulação, sem colar. |
 | Atalhos | Usar uma sessão com KGlobalAccel e as APIs de atalhos do Deepin; `deepin-shortcuts.yml` aplica as combinações sugeridas. |
+| Vírgula decimal | Calculadora Deepin com Qt 6 (Linglong ou launcher nativo compatível); instalado com a GUI, controle em Produtividade. |
 | Miniaturas ao clicar | Requer o dock do `dde-shell` com QML compatível. O controle fica em Aparência e é instalado com a GUI. |
 | Download agendado de paisagens | Requer `deepin-wallpaper.timer` e seu serviço no systemd do usuário. O repositório ainda não fornece a instalação dessas unidades; `deepin-wallpaper.yml` apenas troca a imagem uma vez. |
 | `zclaude` | Instalar o Claude Code e configurar a chave da Z.AI para usar o wrapper; `zclaude.yml` instala o comando. |
@@ -96,8 +98,9 @@ PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -m unittest discover -s tests -v
 ./bin/deepwin --smoke-test
 ```
 
-Os testes unitários usam simulações. O `--smoke-test` exige a interface
-compilada, uma sessão gráfica e as nove integrações disponíveis; um recurso
+Os testes usam simulações; quando o SDK em cache e o plugin compilado estão
+disponíveis, também executam o filtro Qt real em modo offscreen. O `--smoke-test` exige a interface
+compilada, uma sessão gráfica e as dez integrações disponíveis; um recurso
 ausente faz essa verificação falhar, mesmo que a janela abra normalmente.
 
 Com a sessão desbloqueada, a GUI fechada, sem alterações pendentes no painel
@@ -269,6 +272,36 @@ Para diagnóstico interativo, também com o serviço parado:
 ```bash
 ./bin/deepin-clipboard-autopaste --dry-run --diagnose
 ```
+
+## Vírgula decimal na calculadora
+
+Em **Produtividade → Vírgula decimal na calculadora**, habilite o ajuste.
+Feche a calculadora e reabra pelo menu do Deepin. A tecla vírgula passa a ter
+a mesma ação decimal da tecla ponto, inclusive no teclado numérico; por exemplo,
+`1,5 + 0,5` resulta em `2`. O separador exibido continua seguindo a configuração
+regional da própria calculadora.
+
+A integração usa um plugin **Qt 6** com filtro de eventos dentro da calculadora,
+nos modos básico e científico. Preserva a tecla ponto, os atalhos com
+Ctrl/Alt/Shift/Win, o tema e os plugins nativos do Deepin. Não altera o mapa
+do teclado, monitora outros aplicativos ou modifica os arquivos do Linglong.
+O modo programador mantém as regras nativas para números inteiros.
+
+O instalador compila o plugin com o mesmo SDK Qt 6 usado pela GUI. Os recursos
+ficam em `$XDG_DATA_HOME/devedu.deepin-configs/` (padrão `~/.local/share/`):
+`qt6/plugins/generic/libdeepwin-calculator.so`, `bin/deepwin-calculator` e a flag
+`calculator-enabled.json`. Ao ativar, o painel cria apenas a sobreposição
+`$XDG_DATA_HOME/applications/deepin-calculator.desktop`, preservando os nomes,
+ícone e traduções do launcher oficial. Launchers pessoais ou editados não são
+sobrescritos. A correção requer a calculadora Qt 6 e um launcher oficial compatível,
+seja nativo ou `org.deepin.calculator` pelo Linglong. Abrir diretamente por
+`ll-cli run` ou pelo executável original não carrega esse filtro.
+
+Desativar o switch remove a flag e a sobreposição. Uma calculadora que já carregou
+o plugin volta ao tratamento original na próxima tecla; a próxima abertura pelo
+menu também usa o launcher original. **Restaurar alterações** oferece o mesmo
+rollback. Remover apenas a GUI preserva esse recurso, assim como os demais ajustes.
+As decisões e referências estão em [analise-calculadora-deepin.md](analise-calculadora-deepin.md).
 
 ## Miniaturas ao clicar no ícone de um aplicativo
 

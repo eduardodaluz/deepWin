@@ -39,6 +39,16 @@
             path: "{{ playbook_dir }}/.build/deepwin/sdk/usr/include/dtk6/DWidget/DApplication"
           register: deepwin_sdk
 
+        - name: Verificar o compilador de metadados Qt no cache
+          ansible.builtin.stat:
+            path: "{{ playbook_dir }}/.build/deepwin/sdk/usr/lib/qt6/libexec/moc"
+          register: deepwin_moc
+
+        - name: Verificar o compilador de metadados Qt do sistema
+          ansible.builtin.stat:
+            path: /usr/lib/qt6/libexec/moc
+          register: deepwin_system_moc
+
         - name: Verificar o SDK instalado no sistema
           ansible.builtin.command:
             argv: [pkg-config, --exists, dtk6widget]
@@ -51,8 +61,9 @@
           ansible.builtin.command:
             argv: >-
               {{ [playbook_dir + '/bin/build-deepwin'] +
-                 (['--fetch-sdk'] if not deepwin_sdk.stat.exists and
-                  deepwin_system_sdk.rc != 0 else []) }}
+                 (['--fetch-sdk'] if (not deepwin_sdk.stat.exists and
+                  deepwin_system_sdk.rc != 0) or (not deepwin_moc.stat.exists and
+                  not deepwin_system_moc.stat.exists) else []) }}
             chdir: "{{ playbook_dir }}"
           changed_when: false
 
@@ -70,6 +81,7 @@
           loop:
             - "{{ deepwin_data }}/gui"
             - "{{ deepwin_data }}/bin"
+            - "{{ deepwin_data }}/qt6/plugins/generic"
             - "{{ deepwin_home }}/.local/bin"
             - "{{ deepwin_data_home }}/applications"
 
@@ -96,6 +108,24 @@
             src: gui/dock_preview.py
             dest: "{{ deepwin_data }}/gui/dock_preview.py"
             mode: '0644'
+
+        - name: Instalar o filtro Qt da calculadora
+          ansible.builtin.copy:
+            src: .build/deepwin/qt6/plugins/generic/libdeepwin-calculator.so
+            dest: "{{ deepwin_data }}/qt6/plugins/generic/libdeepwin-calculator.so"
+            mode: '0644'
+
+        - name: Instalar o gerenciador da calculadora
+          ansible.builtin.copy:
+            src: gui/calculator_decimal.py
+            dest: "{{ deepwin_data }}/gui/calculator_decimal.py"
+            mode: '0644'
+
+        - name: Instalar o launcher da calculadora sem ativar o ajuste
+          ansible.builtin.copy:
+            src: bin/deepwin-calculator
+            dest: "{{ deepwin_data }}/bin/deepwin-calculator"
+            mode: '0755'
 
         - name: Atualizar o wrapper existente para integrar o seletor
           ansible.builtin.stat:

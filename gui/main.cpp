@@ -107,7 +107,7 @@ public:
         heading->addWidget(refreshButton);
         layout->addLayout(heading);
 
-        auto *intro = new DLabel("Ative e desative seus ajustes. As alterações são aplicadas imediatamente.");
+        auto *intro = new DLabel("Ative e desative seus ajustes do Deepin.");
         intro->setWordWrap(true);
         layout->addWidget(intro);
         auto *scroll = new QScrollArea;
@@ -424,7 +424,7 @@ private:
             firstResult = false;
             if (smokeTest || !screenshotPath.isEmpty()) {
                 QTimer::singleShot(600, this, [this, ok] {
-                    bool valid = ok && rows.size() == 9 &&
+                    bool valid = ok && rows.size() == 10 &&
                         claudeChoice->findData("stable") >= 0 && claudeChoice->findData("system") >= 0;
                     for (const auto &row : rows) valid = valid && row.available;
                     if (!screenshotPath.isEmpty()) valid = grab().save(screenshotPath) && valid;

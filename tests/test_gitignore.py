@@ -25,9 +25,11 @@ class GitignoreTests(unittest.TestCase):
             '.local/state/devedu.deepin-configs/originals.json',
             'state/controller.lock', 'backups/settings.json', 'test.log',
             'claude-selection.json', 'claude-versions.lock', 'claude-versions.json',
+            'calculator-enabled.json',
         ]
         visible = [
             'gui/main.cpp', 'gui/backend.py', 'gui/preview.png',
+            'gui/calculator_decimal.cpp', 'gui/calculator_decimal.json',
             'bin/deepwin', 'bin/build-deepwin', 'deepwin.yml', '.gitignore',
             'CMakeLists.txt', 'CMakePresets.json', 'cmake/Options.cmake',
             'translations/pt_BR.ts', 'resources/assets.qrc',
