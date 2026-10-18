@@ -34,7 +34,7 @@ compilador ou SDK na máquina que vai executar o aplicativo.
 Instale o arquivo pelo instalador gráfico do Deepin ou, na pasta do download:
 
 ```bash
-sudo apt install ./devedu.deepin-configs_1.1.0-1_amd64.deb
+sudo apt install ./devedu.deepin-configs_1.1.0-3_amd64.deb
 deepwin
 ```
 

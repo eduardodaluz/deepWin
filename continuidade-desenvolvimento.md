@@ -15,9 +15,10 @@ Atualizado em **18/10/2026**, na retomada da correção da CI do Linyaps.
   reescritos com árvores idênticas e force push com lease) e commits novos
   devem sair sem o trailer.
 - O mantenedor **autorizou explicitamente o push à `main`** após a rejeição
-  automática inicial. O download anônimo do espelho passou após mudar a
-  visibilidade para Public. Correção pronta para envio e execução na CI;
-  consultar o adendo mais recente para o resultado.
+  automática inicial. Os commits foram enviados e o download do builder no
+  runner passou pelo GHCR. Dois bloqueios seguintes foram diagnosticados:
+  restrição de user namespaces e propriedade UID 1001/1000 do staging.
+  Ajustes implementados e validados localmente; falta confirmar o novo run.
 - **Fase 1 (.deb): concluída e publicada em CI.** Candidato
   `devedu.deepin-configs_1.1.0-3_amd64.deb`; workflow Debian verde em todos
   os pushes; aceite em VM completo (adendo de 18/10).
@@ -28,11 +29,11 @@ Atualizado em **18/10/2026**, na retomada da correção da CI do Linyaps.
   `XDG_DATA_DIRS`; o `8a68fdd8…` citado no adendo da fase 2 foi o build
   intermediário em 6.7.0. Os sete critérios da L2 têm evidência (adendos
   seguintes).
-- **Único item aberto da fase 2: o job `Linyaps package` na CI.** Falha nos
-  três pushes sempre no mesmo ponto — o `docker pull` de
-  `registry.cn-hangzhou.aliyuncs.com/linyaps/builder:1.13.8_amd64` não chega
-  aos runners do GitHub; o mesmo `bin/build-uab` passa nesta máquina. O
-  build do projeto não falhou. **Preparação implementada nesta retomada:**
+- **Único item aberto da fase 2: o job `Linyaps package` na CI.** O pull no
+  runner passou após o espelhamento; a CI revelou mais duas diferenças em
+  relação ao host de desenvolvimento (namespaces e UID do staging), agora
+  corrigidas. Build completo em staging UID 1001 passou localmente, incluindo
+  smoke/export e restauração de propriedade. **Implementado nesta retomada:**
   override `DEEPWIN_BUILDER_IMAGE`, origem fixada por digest, pull separado
   com três tentativas limitadas e logs anexados mesmo em falha. A variável
   de repositório `DEEPWIN_BUILDER_IMAGE` permite trocar a origem.
@@ -678,3 +679,62 @@ sem credenciais, e passou para o digest GHCR
 `sha256:9170f635112d5068ef815d6e55d6bd3969e668151bd31a33ca48086f53fd372a`.
 A autorização elimina o bloqueio anterior do push; a confirmação da CI
 continua sendo o próximo passo. Sem Release ou tag de aplicação publicados.
+
+## Diagnóstico além do pull — 18/10/2026
+
+O push autorizado enviou a correção e o registro até `d5a6765`. O run Debian
+[39176490074](https://github.com/eduardodaluz/deepWin/actions/runs/39176490074)
+passou. No run Linyaps
+[39176490142](https://github.com/eduardodaluz/deepWin/actions/runs/39176490142),
+o pull pelo GHCR passou em 12 s, mas o build falhou 7 s depois.
+
+As anotações individuais por linha esgotavam o espaço de diagnóstico com o
+progresso do pull, ocultando a mensagem do build. `92a55fe` passou a emitir
+uma anotação multiline por arquivo, com escape de LF/CR/%. A nova execução
+[39176871739](https://github.com/eduardodaluz/deepWin/actions/runs/39176871739)
+mostrou o erro real: `failed to run in namespace ... clone failed: Operation
+not permitted`, antes da compilação. A hipótese inicial de falha exclusiva
+do registro não explicava esse segundo bloqueio; a imagem local continua
+compilando corretamente.
+
+`80b680a` fixa o runner Linyaps em Ubuntu 24.04, prepara temporariamente
+`kernel.apparmor_restrict_unprivileged_userns=0` na VM descartável do GitHub
+e restaura o valor anterior via trap EXIT ao terminar o build. O builder
+oficial usa usuário não root e precisa criar esses namespaces mesmo dentro
+do Docker privilegiado. Nenhum sysctl da máquina de desenvolvimento foi
+alterado. Simulações validaram restauração após sucesso e falha, valor já
+igual a zero e ausência da chave; YAML/Bash passaram na validação sintática.
+
+O download anônimo do log completo retornou HTTP 403. A revisão automática
+rejeitou reutilizar o token Docker na API do GitHub por falta de autorização
+específica. Nenhuma credencial foi lida ou reutilizada; o diagnóstico acima
+foi obtido apenas das anotações públicas após compactar o relatório.
+
+## Staging com UID diferente — 18/10/2026
+
+No run com o ajuste de namespaces,
+[39177006827](https://github.com/eduardodaluz/deepWin/actions/runs/39177006827),
+o builder iniciou corretamente e leu o manifesto, mas falhou com `stage
+prepare error`. A causa foi reproduzida localmente: o staging do runner
+pertence ao UID 1001, enquanto `builder` na imagem oficial é UID 1000.
+O mesmo projeto que compila com UID 1000 falhou imediatamente ao trocar
+apenas a propriedade da cópia temporária para UID 1001.
+
+`bin/build-uab` agora inicia um wrapper root no container para normalizar
+somente a propriedade do staging; executa o build, smoke e export como
+`builder` via `runuser`, e restaura o UID/GID original por trap EXIT.
+`chown -hR` não segue links. O checkout e o home continuam fora das
+montagens; o cache de Base/Runtime conserva a identidade do builder.
+
+Validação real em Docker, não apenas simulação:
+
+- Reprodução anterior: staging UID 1001, saída 255 e `stage prepare error`.
+- Com o wrapper: build completo sobre staging UID 1001, `pydeps OK`,
+  `DeepWin 1.1.0`, exportação UAB e UID 1001 restaurado ao terminar.
+- Falha controlada no processo builder: saída 23 preservada e propriedade
+  restaurada também para o arquivo criado durante a execução.
+- Suíte Python: 126 testes passando.
+
+Log da prova completa: `/tmp/deepwin-uab-uid-fix-build.log`. O UAB dessa prova
+ficou no staging descartável; o candidato existente em `dist/` não foi
+substituído. Correção pronta para enviar ao próximo run da CI.

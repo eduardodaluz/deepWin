@@ -32,6 +32,17 @@ DEBS = [
     'pool/main/g/gobject-introspection/libgirepository-1.0-1_1.80.1-3deepin1_amd64.deb',
 ]
 
+# O runner pode ter UID diferente do builder (1001 no GitHub, 1000 na
+# imagem). Normalizar só o staging e devolver sua propriedade antes de
+# o host copiar o resultado e limpar o diretório temporário. Não seguir links.
+BUILDER_WRAPPER = '''set -eu
+workspace=/home/builder-ws
+owner=$(stat -c '%u:%g' "$workspace")
+trap 'chown -hR "$owner" "$workspace"' EXIT
+chown -hR builder:builder "$workspace"
+runuser -u builder -- /bin/sh -eu -c "$1"
+'''
+
 
 def ensure_debs(cache):
     cache.mkdir(parents=True, exist_ok=True)
@@ -48,6 +59,24 @@ def copy_source(destination):
                         ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*.log'))
     for name in ('CMakeLists.txt', 'VERSION', 'LICENSE', 'resources.json'):
         shutil.copyfile(ROOT / name, destination / name)
+
+
+def run_builder(stage, image, offline=False):
+    build_flags = ' --offline' if offline else ''
+    script = f'''set -eu
+cd /home/builder-ws
+ll-builder build{build_flags}
+ll-builder run -- /usr/bin/python3 -c "import sys; sys.path.insert(0, '{PREFIX}/lib/deepwin/gui'); import backend, dbus, gi; from gi.repository import Gio; print('pydeps OK')"
+ll-builder run -- deepwin --version
+ll-builder export --modules binary -z zstd
+'''
+    subprocess.run(['docker', 'run', '--privileged', '--rm', '--user', 'root',
+                    '-v', CACHE_VOLUME + ':/home/builder',
+                    '-v', str(stage) + ':/home/builder-ws',
+                    '-w', '/home/builder-ws',
+                    '-e', 'LANG=C.UTF-8',
+                    image, '/bin/sh', '-eu', '-c', BUILDER_WRAPPER,
+                    'deepwin-builder', script], check=True)
 
 
 def main():
@@ -80,20 +109,7 @@ def main():
         shutil.copyfile(ROOT / 'linglong.yaml', stage / 'linglong.yaml')
         copy_source(stage / 'src')
         shutil.copytree(work / 'debs', stage / 'src' / 'debs')
-        build_flags = ' --offline' if args.offline else ''
-        script = f'''set -eu
-cd /home/builder-ws
-ll-builder build{build_flags}
-ll-builder run -- /usr/bin/python3 -c "import sys; sys.path.insert(0, '{PREFIX}/lib/deepwin/gui'); import backend, dbus, gi; from gi.repository import Gio; print('pydeps OK')"
-ll-builder run -- deepwin --version
-ll-builder export --modules binary -z zstd
-'''
-        subprocess.run(['docker', 'run', '--privileged', '--rm',
-                        '-v', CACHE_VOLUME + ':/home/builder',
-                        '-v', str(stage) + ':/home/builder-ws',
-                        '-w', '/home/builder-ws',
-                        '-e', 'LANG=C.UTF-8',
-                        image, '/bin/sh', '-eu', '-c', script], check=True)
+        run_builder(stage, image, offline=args.offline)
         packages = sorted(stage.glob('*.uab'))
         if not packages:
             raise SystemExit('O build não gerou o .uab.')

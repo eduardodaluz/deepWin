@@ -17,8 +17,8 @@ ghcr.io/eduardodaluz/linyaps-builder@sha256:9170f635112d5068ef815d6e55d6bd3969e6
 ```
 
 O digest do manifesto no destino difere do original; o ID da imagem deve
-permanecer igual. O workflow está preparado para usar esse espelho por
-padrão, após confirmar sua visibilidade pública.
+permanecer igual. O pull anônimo pelo digest foi confirmado, e o workflow
+usa esse espelho por padrão.
 
 ## Publicar a imagem validada
 
@@ -74,3 +74,34 @@ build, smoke tests e exportação do artefato. Remover a variável restaura o
 espelho padrão no GHCR. Para usar a origem oficial na CI, configure a
 variável com a referência Aliyun do início deste documento.
 A publicação do builder não publica um Release do DeepWin.
+
+## Namespaces no runner Ubuntu
+
+O job usa `ubuntu-24.04`. Além de Docker `--privileged`, o builder executado
+como usuário `builder` precisa criar user namespaces. A restrição AppArmor
+do Ubuntu pode impedir essa operação com `clone failed: Operation not
+permitted`, antes de compilar qualquer fonte.
+
+Durante o passo de build, o workflow salva o valor de
+`kernel.apparmor_restrict_unprivileged_userns`, ajusta-o para `0` e registra
+um trap `EXIT` que restaura o valor original, inclusive se o build falhar.
+Isso ocorre somente na VM descartável do GitHub; `bin/build-uab` não altera
+configurações do kernel da máquina de desenvolvimento.
+A restrição está descrita nas
+[notas oficiais do Ubuntu 24.04](https://github.com/ubuntu/ubuntu-release-notes/blob/main/docs/24.04/index.md).
+
+Falhas são publicadas em uma anotação por arquivo de log, com quebras de
+linha escapadas. Isso preserva o diagnóstico do build quando o download
+produz muitas linhas de progresso.
+
+## Propriedade do staging
+
+O usuário do runner pode ter UID 1001, enquanto o `builder` da imagem tem
+UID 1000. Um staging pertencente ao runner impede o builder de preparar o
+projeto (`stage prepare error`).
+
+`bin/build-uab` inicia um wrapper como root no container somente para dar ao
+`builder` a propriedade da cópia temporária dos fontes. A compilação,
+os smoke tests e a exportação executam como `builder`, via `runuser`.
+Um trap restaura o UID/GID original do staging ao sair, inclusive em erro.
+O `chown -hR` não segue links; o checkout e a pasta pessoal não são montados.
