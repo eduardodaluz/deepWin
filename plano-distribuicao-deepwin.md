@@ -1,20 +1,20 @@
 # Plano de distribuição do DeepWin
 
-Status em 18/10/2026: fase 1 validada também em VM Deepin 25.2.0 com sessão
-gráfica completa e Solid ativo (D6) — 116 testes Python, CTest 2/2, Lintian sem
-avisos, fluxo `bin/verify-deb` aprovado, ativação dos 10 recursos na sessão
-real, atualização com ajustes ativos preservando o estado byte a byte, conflito
-de unidade customizada recusado, remoção com restauração funcional pelo runtime
-e reinstalação normais, e interação humana confirmada (prévias da dock, vírgula
-na calculadora, Win+Shift+S, Win+V + Enter, workspaces). O aceite encontrou e
-corrigiu três falhas — duas gerações do serviço de atalhos, falso
-"personalizado" na prévia da dock e corrida assíncrona do daemon antigo;
-detalhes no adendo de 18/10 da [passagem](continuidade-desenvolvimento.md).
-Candidato: `devedu.deepin-configs_1.1.0-3_amd64.deb`. Pendem a decisão de
-commit/push e a execução do workflow no GitHub. Fases 2 e 3 permanecem futuras.
-O diagnóstico e os checklists abaixo registram o plano original; consulte a
-[passagem de desenvolvimento](continuidade-desenvolvimento.md) para o estado
-efetivo, os testes realizados e as pendências antes de marcar entregas concluídas.
+Status em 18/10/2026: fase 1 concluída — validada em VM Deepin 25.2.0 com
+sessão gráfica completa e Solid ativo (D6), commits publicados e workflow do
+GitHub Actions verde com artefato; candidato
+`devedu.deepin-configs_1.1.0-3_amd64.deb`. Fase 2 iniciada e com a L1
+concluída: a [matriz de acesso Linyaps](matriz-acesso-linyaps.md) registra a
+prova empírica de que o container alcança a sessão hospedeira (D-Bus de
+sessão, systemd do usuário, `$HOME` real, rootfs do host em leitura) e a
+decisão por acesso direto. O candidato
+`devedu.deepin-configs_1.1.0.0_x86_64_main.uab` foi gerado por `bin/build-uab`
+em Docker, com smoke de `dbus`/`gi` dentro do sandbox. Pendem o aceite da
+fase 2 em VM limpa e a decisão de publicar o workflow Linyaps na CI. A fase 3
+permanece futura. O diagnóstico e os checklists abaixo registram o plano
+original; consulte a [passagem de desenvolvimento](continuidade-desenvolvimento.md)
+para o estado efetivo, os testes realizados e as pendências antes de marcar
+entregas concluídas.
 
 ## Objetivo e sequência
 

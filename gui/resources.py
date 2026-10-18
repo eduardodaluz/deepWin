@@ -28,7 +28,7 @@ class Resources:
         self.runtime = self.data / 'runtime'
         self.current = self.runtime / 'current'
 
-    def file(self, relative):
+    def file(self, relative, required=True):
         path = Path(relative)
         if path.is_absolute() or '..' in path.parts:
             raise ResourceError('Caminho de recurso inválido.')
@@ -40,6 +40,8 @@ class Resources:
         for candidate in candidates:
             if candidate.is_file() and not candidate.is_symlink():
                 return candidate
+        if not required:
+            return None
         raise ResourceError('Recurso distribuído não encontrado: ' + relative)
 
     @property
@@ -51,7 +53,17 @@ class Resources:
             manifest = json.loads(self.file('resources.json').read_text())
             if manifest.get('format') != 1 or not isinstance(manifest['files'], list):
                 raise ValueError()
-            return {name: self.file(name) for name in manifest['files']}
+            optional = manifest.get('files_optional', [])
+            if not isinstance(optional, list):
+                raise ValueError()
+            files = {name: self.file(name) for name in manifest['files']}
+            # Extrações do pacote Linyaps ausentes no .deb; presentes entram
+            # no runtime e no hash de identidade, ausentes são silenciosas.
+            for name in optional:
+                path = self.file(name, required=False)
+                if path is not None:
+                    files[name] = path
+            return files
         except (KeyError, ValueError, TypeError, AttributeError) as error:
             raise ResourceError('Manifesto de recursos inválido.') from error
 

@@ -1,0 +1,38 @@
+version: "1"
+
+package:
+  id: devedu.deepin-configs
+  name: DeepWin
+  version: 1.1.0.0
+  kind: app
+  description: |
+    Painel nativo de configuracoes do desktop Deepin
+
+command:
+  - deepwin
+
+# Slots da série 25 usados pelos apps da deepin; a referência com três
+# dígitos permite atualização do quarto dígito pelo gerenciador.
+base: org.deepin.base/25.2.2
+runtime: org.deepin.runtime.dtk/6.7.0
+
+source:
+  - kind: local
+    dir: src
+
+# O sandbox de build não resolve apt de forma confiável e o layer não pode
+# carregar estado do apt; bin/build-uab pré-baixa os .deb beige das
+# dependências Python para src/debs e o script extrai só o que o manifesto
+# lista. O diretório de build é removido para o delta do layer ficar mínimo.
+build: |
+  set -eux
+  src/packaging/extract-pydeps src/pydeps src/debs src/resources.json
+  cmake -B build -S src \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTING=OFF \
+    -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+    -DCMAKE_INSTALL_LIBDIR=lib \
+    -DCMAKE_PREFIX_PATH=/runtime
+  cmake --build build -j"$(nproc)"
+  cmake --install build
+  rm -rf build src/pydeps

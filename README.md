@@ -21,12 +21,11 @@ Ele permite habilitar e desabilitar dez recursos:
 
 ### Instalação pelo pacote Debian
 
-O pacote de teste da fase 1 tem como alvo **Deepin 25 amd64**. Há um pacote
-gerado localmente, já validado em imagem limpa: instalação, abertura,
-reinstalação, remoção e o comando de restauração independente. O workflow
-de Actions foi preparado no código e ainda precisa ser enviado e validado antes
-de disponibilizar artefatos para download; o aceite final em VM com sessão
-gráfica completa também está pendente. O estado do trabalho está na
+O pacote de teste da fase 1 tem como alvo **Deepin 25 amd64**, já validado em
+imagem limpa e em VM com sessão gráfica completa: instalação, abertura,
+atualização com recursos ativos, remoção e o comando de restauração
+independente. O workflow de Actions gera e valida o pacote a cada push e
+publica o artefato para download. O estado do trabalho está na
 [passagem de desenvolvimento](continuidade-desenvolvimento.md).
 O pacote inclui a GUI DTK,
 o plugin da calculadora e os recursos de integração; não requer Ansible,
@@ -61,6 +60,35 @@ completo já passa. Para build nativo,
 instale as dependências de `debian/control` e execute `./bin/build-deb`.
 A validação em container não substitui o aceite final em uma VM com desktop
 Deepin completo; este pacote deve ser tratado inicialmente como versão de teste.
+
+### Build pelo pacote Linyaps (.uab)
+
+O candidato da fase 2 empacota a mesma aplicação para o **Linyaps** (antigo
+Linglong), formato de distribuição do Deepin 25. A prova de integração com o
+sistema hospedeiro está registrada na
+[matriz de acesso](matriz-acesso-linyaps.md): o container expõe o D-Bus da
+sessão, o `$HOME` real, o systemd do usuário e a raiz do host em leitura, e o
+painel opera sem ponte adicional.
+
+Para gerar o artefato, basta Docker no host de build; o build inteiro acontece
+no builder oficial do Linyaps, com slots fixados (`org.deepin.base/25.2.2` +
+`org.deepin.runtime.dtk/6.7.0`) e cache de camadas em um volume nomeado:
+
+```bash
+./bin/build-uab            # primeira execução baixa os slots (~2 GB de cache)
+./bin/build-uab --offline  # reusa o cache já preparado
+```
+
+O `.uab` e o checksum ficam em `dist/`. No alvo com Deepin 25, que já traz o
+ambiente Linyaps, instale com `ll-cli install ./devedu.deepin-configs_*.uab`
+ou pelo instalador gráfico. As dependências Python (`python3-dbus`,
+`python3-gi`) não existem no runtime Linyaps e viajam extraídas dos debs
+beige dentro do pacote, carregadas por um bootstrap no backend e no helper de
+colagem; no `.deb` elas continuam vindo por `Depends`. No pacote Linyaps, a
+instalação de versões do Claude pelo seletor da GUI fica indisponível (sem
+`npm` no sandbox); o comando `zclaude` do terminal segue funcionando, pois
+executa no host. O aceite em VM Deepin 25 limpa permanece pendente; até lá,
+trate o `.uab` como versão de teste.
 
 ### Instalação pelo código-fonte
 
@@ -170,11 +198,12 @@ ou altera uma configuração.
 
 ### Distribuição em instaladores
 
-O [plano de distribuição](plano-distribuicao-deepwin.md) organiza as próximas
-entregas em três fases: **1. `.deb`**, **2. Linyaps/Linglong (`.uab`)** e
+O [plano de distribuição](plano-distribuicao-deepwin.md) organiza as entregas
+em três fases: **1. `.deb`**, **2. Linyaps/Linglong (`.uab`)** e
 **3. portátil (`.tar.xz`)**. O alvo inicial é Deepin 25 em amd64, com os mesmos
-ajustes e backups por usuário. A fase 1 já tem build e pacote de teste;
-as fases Linyaps e portátil continuam planejadas.
+ajustes e backups por usuário. A fase 1 está validada e publicada em CI; a
+fase 2 tem a prova de integração concluída e candidato `.uab` gerado, pendente
+de aceite em VM; a fase 3 permanece planejada.
 
 ### Runtime persistente e restauração
 

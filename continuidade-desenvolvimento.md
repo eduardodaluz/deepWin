@@ -356,3 +356,88 @@ superfície estável do Qt 6, metadados Qt 6.8, carrega em qualquer runtime
 major do Qt ou alvo com Qt anterior a 6.8. Um aviso do Lintian no changelog
 (`wrong-day-of-week`) foi corrigido: 18/10/2026 é domingo. O `--help` da GUI
 continua exigindo sessão gráfica, fora do escopo desta fase.
+
+## Fase 2, Linyaps — 18/10/2026
+
+A fase 2 foi disparada com subagentes em três frentes paralelas: pesquisa do
+tooling Linyaps atual, pesquisa do modelo de sandbox e inventário dos
+touchpoints do repositório. A L1 (prova de integração antes do empacotamento)
+foi concluída no mesmo dia.
+
+Evidências da L1, registradas na [matriz de acesso](matriz-acesso-linyaps.md):
+
+- Leitura do código-fonte do linyaps na tag 1.14.3 (a mesma do Deepin 25
+  local): o sandbox monta o socket do D-Bus de sessão do host sem filtro, o
+  `$HOME` real em leitura/escrita no mesmo caminho, dconf gravável,
+  X11/Wayland, rede compartilhada e `/run/host/rootfs` (raiz do host em
+  leitura). Sem facetas/permissões declaráveis no manifesto.
+- Sonda descartável dentro de um sandbox real via
+  `ll-cli run org.deepin.calculator`: `systemctl --user` alcançou o manager do
+  host por fallback ao bus (listou unidades do host, leu unidade fornecida por
+  app linyaps, aceitou `daemon-reload`); escritas em `~/.config` e
+  `~/.local/share` persistiram no host com os mesmos timestamps;
+  `RequestName` aceito; QML da taskmanager legível em `/run/host/rootfs`.
+- `~/.ssh`, `~/.gnupg` e `~/.linglong` são mascarados; `XDG_RUNTIME_DIR` do
+  app é privado; sem sudo/docker dentro do container — irrelevante ao painel.
+- Risco registrado: a FAQ oficial declara intenção de privatizar `XDG_*_HOME`
+  por app; no 1.14.3 o gatilho é a existência de `~/.linglong/<id>/config` —
+  nenhum fluxo do painel cria esse diretório. Reavaliar em cada minor do
+  linyaps.
+
+Decisão L1: **acesso direto aprovado** — a arquitetura atual funciona dentro
+do sandbox sem ponte. Unidades fornecidas pelo pacote
+(`$PREFIX/lib/systemd/user`, com `ExecStart` reescrito para `ll-cli run`)
+ficam registradas como endurecimento futuro.
+
+Spike de build: builder oficial em Docker
+(`registry.cn-hangzhou.aliyuncs.com/linyaps/builder:1.13.8_amd64`,
+`--privileged`, cache em volume nomeado); slots `org.deepin.base/25.2.2` →
+25.2.2.8 e `org.deepin.runtime.dtk/6.7.0` → 6.7.0.50 resolvidos no repo
+estável (a doc lista 25.2.2, os apps reais da deepin usam a série 6.7.0). O
+builder puxa sozinho os módulos develop com toolchain completa — o truque
+`apt --download-only` dos apps da deepin é desnecessário. O apt dentro do
+sandbox de build mostrou-se não confiável (indexes parciais), e commit de
+layer com estado sujo do apt leva dezenas de minutos.
+
+Implementação (L2 local, pendente de aceite em VM):
+
+- `linglong.yaml` na raiz, slots fixados, script de build que extrai
+  `pydeps/`, compila por CMake contra `/runtime` e remove os artefatos para o
+  delta do layer ficar mínimo.
+- `bin/build-uab`: staging, pré-download dos debs beige das dependências
+  Python (versões fixadas, casando com os slots), build/smoke/export no
+  Docker, checksum em `dist/`.
+- O runtime Linyaps não traz `python3-dbus` nem `gi`; o `.deb` os obtém por
+  `Depends`. O pacote Linyaps embarca cópias podadas (51 arquivos,
+  `cpython-312`, beige 2.80) listadas no novo `files_optional` do
+  `resources.json`, instaladas em `lib/deepwin/pydeps` por um bloco
+  condicional do CMake e materializadas no runtime por usuário pelo mecanismo
+  existente — sem mudança no protocolo de releases; no `.deb` as entradas
+  opcionais ausentes são silenciosas.
+- `bootstrap_runtime_python()` em `gui/backend.py` e no helper de colagem:
+  insere `pydeps/dist-packages` no `sys.path`, pré-carrega a biblioteca
+  nativa em escopo global (sem `LD_LIBRARY_PATH`) e prepara
+  `GI_TYPELIB_PATH` antes das importações tardias de `dbus`/`gi`. No `.deb`
+  é no-op. O `deepwin-restore` é coberto pelo bootstrap do backend.
+- `Native.host_tool()`: os helpers executam no host, então as checagens de
+  `xdotool`/`curl`/`file`/`gsettings` consultam primeiro
+  `/run/host/rootfs/usr/bin` quando existente.
+- `resolve_system_dir()` na prévia da dock: QML lido de
+  `/run/host/rootfs/usr/share/dde-shell` quando o caminho do sistema não
+  existe (container), sem mudança fora dele.
+- `packaging/extract-pydeps`: monta `pydeps/` dos debs pré-baixados com o
+  manifesto como lista autoritativa; entrada listada e ausente falha o build.
+- Seletor de versões do Claude fica indisponível no pacote Linyaps (sem
+  `npm` no sandbox); o wrapper `zclaude` roda no host e não é afetado.
+
+Resultados: 125 testes Python (eram 116), cobrindo bootstrap, `host_tool`,
+fallback do dock e extração; candidato
+`devedu.deepin-configs_1.1.0.0_x86_64_main.uab` (211 MiB, sha256
+`8a68fdd814ea1719bf6b682d62fd15fcb957e2eb4c4dc029d2c2fe57505e53e4`) gerado
+por `bin/build-uab --offline`, com smoke de importação `dbus`/`gi` e
+`deepwin --version` aprovados dentro do sandbox; rebuild do `.deb` 1.1.0-3 e
+`bin/verify-deb` reexecutados na imagem limpa — PASS, zero regressão da
+fase 1. Pendências da L2: instalar e exercitar o `.uab` em VM Deepin 25
+limpa (incluindo a prova fina de X11 do helper de colagem e a persistência
+de estado após reinício do container) e a decisão do mantenedor sobre publicar
+o workflow Linyaps na CI. Commit local sem push.

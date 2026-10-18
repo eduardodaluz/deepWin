@@ -26,6 +26,12 @@ install(PROGRAMS bin/zclaude bin/deepwin-calculator bin/deepin-clipboard-autopas
     bin/refresh-deepin-wallpaper bin/deepwin-restore DESTINATION "${DEEPWIN_RESOURCE_DIR}/bin")
 install(DIRECTORY packaging/systemd/ DESTINATION "${DEEPWIN_RESOURCE_DIR}/systemd")
 install(FILES VERSION LICENSE resources.json DESTINATION "${DEEPWIN_RESOURCE_DIR}")
+# Extrações beige (python3-dbus/gi) presentes apenas no build Linyaps; no
+# .deb as dependências Python continuam vindo por Depends.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/pydeps")
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/pydeps/"
+            DESTINATION "${DEEPWIN_RESOURCE_DIR}/pydeps" USE_SOURCE_PERMISSIONS)
+endif()
 configure_file(packaging/deepwin.in deepwin @ONLY)
 install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/deepwin" DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(FILES packaging/devedu.deepin-configs.desktop DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")

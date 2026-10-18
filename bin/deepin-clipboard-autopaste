@@ -19,6 +19,37 @@ import sys
 import time
 
 
+def bootstrap_runtime_python(root=None):
+    """Carregar dbus/gi extraídos para o runtime por usuário (pacote Linyaps).
+
+    Espelha o bootstrap do backend: no .deb as dependências vêm do sistema
+    e aqui não faz nada. As importações de dbus/gi são tardias neste script.
+    """
+    base = Path(root or Path(__file__).resolve().parents[1]) / 'pydeps'
+    if not base.is_dir():
+        return
+    packages = base / 'dist-packages'
+    if packages.is_dir():
+        sys.path.insert(0, str(packages))
+    lib = base / 'lib'
+    if lib.is_dir():
+        import ctypes
+        for soname in sorted(lib.glob('lib*.so.*')):
+            if soname.is_symlink():
+                continue
+            try:
+                ctypes.CDLL(str(soname), mode=ctypes.RTLD_GLOBAL)
+            except OSError:
+                pass
+    typelib = base / 'girepository-1.0'
+    if typelib.is_dir():
+        current = os.environ.get('GI_TYPELIB_PATH')
+        paths = [str(typelib)] + ([current] if current else [])
+        os.environ['GI_TYPELIB_PATH'] = os.pathsep.join(paths)
+
+
+bootstrap_runtime_python()
+
 LOG = logging.getLogger("deepin-clipboard-autopaste")
 CLIP = "org.deepin.dde.Clipboard1"
 CLIP_PATH = "/org/deepin/dde/Clipboard1"

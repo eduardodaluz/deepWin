@@ -1,0 +1,102 @@
+#!/usr/bin/python3
+"""Gera o .uab Linyaps em staging; o build inteiro acontece em Docker.
+
+Compila no builder oficial do Linyaps com os slots fixados em linglong.yaml,
+verifica o resultado dentro do sandbox do aplicativo e exporta o UAB para
+dist/ com checksum. No host, nada é instalado: o builder usa uma imagem
+Docker e mantém o cache de camadas em um volume nomeado.
+"""
+import argparse
+import fcntl
+import hashlib
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+IMAGE = 'registry.cn-hangzhou.aliyuncs.com/linyaps/builder:1.13.8_amd64'
+CACHE_VOLUME = 'll-builder-cache'
+REPO = 'https://cdn-community-packages.deepin.com/deepin/beige/'
+APP_ID = 'devedu.deepin-configs'
+PREFIX = '/opt/apps/' + APP_ID + '/files'
+# Versões beige fixadas para casar com os slots org.deepin.base/25.2.2 e
+# org.deepin.runtime.dtk/6.7.0; atualizar junto com eles.
+DEBS = [
+    'pool/main/d/dbus-python/python3-dbus_1.3.2-5deepin1_amd64.deb',
+    'pool/main/p/pygobject/python3-gi_3.48.2-1_amd64.deb',
+    'pool/main/g/glib2.0/gir1.2-glib-2.0_2.80.1-1deepin1_amd64.deb',
+    'pool/main/g/gobject-introspection/libgirepository-1.0-1_1.80.1-3deepin1_amd64.deb',
+]
+
+
+def ensure_debs(cache):
+    cache.mkdir(parents=True, exist_ok=True)
+    for path in DEBS:
+        target = cache / path.rsplit('/', 1)[1]
+        if target.is_file() and target.stat().st_size:
+            continue
+        subprocess.run(['curl', '-fsSL', '-o', str(target), REPO + path], check=True)
+
+
+def copy_source(destination):
+    for name in ('bin', 'gui', 'packaging'):
+        shutil.copytree(ROOT / name, destination / name,
+                        ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*.log'))
+    for name in ('CMakeLists.txt', 'VERSION', 'LICENSE', 'resources.json'):
+        shutil.copyfile(ROOT / name, destination / name)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output', type=Path, default=ROOT / 'dist')
+    parser.add_argument('--offline', action='store_true',
+                        help='compilar sem rede usando o cache do builder já preparado')
+    args = parser.parse_args()
+    if not shutil.which('docker'):
+        raise SystemExit('Docker não encontrado; o build Linyaps é todo em container.')
+    version = (ROOT / 'VERSION').read_text().strip()
+    manifest = (ROOT / 'linglong.yaml').read_text()
+    if ('version: ' + version + '.0') not in manifest:
+        raise SystemExit('linglong.yaml: package.version deve ser ' + version
+                         + '.0 — atualize junto com VERSION.')
+    output = args.output.resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    work = ROOT / '.build/uab'
+    work.mkdir(parents=True, exist_ok=True)
+    ensure_debs(work / 'debs')
+    lock = (work / 'build.lock').open('a')
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    with tempfile.TemporaryDirectory(prefix='workspace-', dir=work) as temporary:
+        stage = Path(temporary) / 'workspace'
+        stage.mkdir()
+        shutil.copyfile(ROOT / 'linglong.yaml', stage / 'linglong.yaml')
+        copy_source(stage / 'src')
+        shutil.copytree(work / 'debs', stage / 'src' / 'debs')
+        build_flags = ' --offline' if args.offline else ''
+        script = f'''set -eu
+cd /home/builder-ws
+ll-builder build{build_flags}
+ll-builder run -- /usr/bin/python3 -c "import sys; sys.path.insert(0, '{PREFIX}/lib/deepwin/gui'); import backend, dbus, gi; from gi.repository import Gio; print('pydeps OK')"
+ll-builder run -- deepwin --version
+ll-builder export --modules binary -z zstd
+'''
+        subprocess.run(['docker', 'run', '--privileged', '--rm',
+                        '-v', CACHE_VOLUME + ':/home/builder',
+                        '-v', str(stage) + ':/home/builder-ws',
+                        '-w', '/home/builder-ws',
+                        '-e', 'LANG=C.UTF-8',
+                        IMAGE, '/bin/sh', '-eu', '-c', script], check=True)
+        packages = sorted(stage.glob('*.uab'))
+        if not packages:
+            raise SystemExit('O build não gerou o .uab.')
+        for package in packages:
+            shutil.copyfile(package, output / package.name)
+            digest = hashlib.sha256((output / package.name).read_bytes()).hexdigest()
+            (output / package.name).with_suffix(package.suffix + '.sha256').write_text(
+                digest + '  ' + package.name + '\n')
+    print('UAB e checksum disponíveis em:', output)
+
+
+if __name__ == '__main__':
+    main()

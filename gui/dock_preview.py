@@ -55,11 +55,30 @@ def tree_hashes(root):
     return result
 
 
+SYSTEM_PLUGIN_DIR = '/usr/share/dde-shell/' + PLUGIN
+HOST_ROOT = '/run/host/rootfs'
+
+
+def resolve_system_dir(system_dir=None, host_root=None):
+    """Localizar o QML original do dock; explicito vence, hospedeiro em seguida.
+
+    Dentro de um container Linyaps o dock do hospedeiro é lido pela raiz
+    exposta em /run/host/rootfs; fora dele só o caminho do sistema existe.
+    """
+    if system_dir is not None:
+        return Path(system_dir)
+    candidates = [Path(SYSTEM_PLUGIN_DIR),
+                  Path(host_root or HOST_ROOT) / 'usr/share/dde-shell' / PLUGIN]
+    return next((path for path in candidates
+                 if (path / 'AppItem.qml').is_file()), candidates[0])
+
+
 class DockPreview:
-    def __init__(self, home=None, data_home=None, system_dir=None, helper=None, config_home=None):
+    def __init__(self, home=None, data_home=None, system_dir=None, helper=None,
+                 config_home=None, host_root=None):
         self.home = Path(home or Path.home())
         self.data_home = Path(data_home or os.environ.get('XDG_DATA_HOME', self.home / '.local/share'))
-        self.system_dir = Path(system_dir or '/usr/share/dde-shell/' + PLUGIN)
+        self.system_dir = resolve_system_dir(system_dir, host_root)
         self.local_dir = self.data_home / 'dde-shell' / PLUGIN
         config = Path(config_home or os.environ.get('XDG_CONFIG_HOME', self.home / '.config'))
         self.dropin = config / 'systemd/user' / (SERVICE + '.d') / '50-deepwin-preview.conf'

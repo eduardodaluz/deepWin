@@ -17,6 +17,38 @@ import sys
 import tempfile
 
 
+def bootstrap_runtime_python(root=None):
+    """Carregar dbus/gi extraídos para o runtime por usuário (pacote Linyaps).
+
+    O .deb instala python3-dbus/python3-gi por Depends e este bootstrap não
+    faz nada. No pacote Linyaps as cópias beige ficam em pydeps/ junto ao
+    código distribuído; a biblioteca nativa é pré-carregada em escopo global
+    para que o _gi.so resolva o soname sem LD_LIBRARY_PATH.
+    """
+    base = Path(root or Path(__file__).resolve().parents[1]) / 'pydeps'
+    if not base.is_dir():
+        return
+    packages = base / 'dist-packages'
+    if packages.is_dir():
+        sys.path.insert(0, str(packages))
+    lib = base / 'lib'
+    if lib.is_dir():
+        import ctypes
+        for soname in sorted(lib.glob('lib*.so.*')):
+            if soname.is_symlink():
+                continue
+            try:
+                ctypes.CDLL(str(soname), mode=ctypes.RTLD_GLOBAL)
+            except OSError:
+                pass
+    typelib = base / 'girepository-1.0'
+    if typelib.is_dir():
+        current = os.environ.get('GI_TYPELIB_PATH')
+        paths = [str(typelib)] + ([current] if current else [])
+        os.environ['GI_TYPELIB_PATH'] = os.pathsep.join(paths)
+
+
+bootstrap_runtime_python()
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from claude_versions import ClaudeVersions
@@ -170,6 +202,14 @@ class Native:
                 'enabled': values.get('UnitFileState', 'disabled'),
                 'dry_run': '--dry-run' in values.get('ExecStart', '')}
 
+    def host_tool(self, name, host_root='/run/host/rootfs'):
+        # Os helpers executam no host; dentro de um container Linyaps o
+        # binário é conferido na raiz do hospedeiro exposta em leitura.
+        candidate = Path(host_root) / 'usr/bin' / name
+        if candidate.is_file():
+            return str(candidate)
+        return shutil.which(name)
+
     def requirements(self, feature):
         if feature == 'clipboard':
             if os.environ.get('XDG_SESSION_TYPE') != 'x11':
@@ -177,11 +217,11 @@ class Native:
             for name in ('org.deepin.dde.Clipboard1', 'org.deepin.dde.XEventMonitor1'):
                 if not self.bus.name_has_owner(name):
                     raise ConfigError('O serviço nativo de colagem não está disponível nesta sessão.')
-            if not shutil.which('xdotool'):
-                raise ConfigError('Instale xdotool para usar a colagem automática.')
+            if not self.host_tool('xdotool'):
+                raise ConfigError('Instale xdotool no sistema para usar a colagem automática.')
         elif feature == 'wallpaper':
             for command in ('curl', 'file', 'gsettings'):
-                if not shutil.which(command):
+                if not self.host_tool(command):
                     raise ConfigError('Dependência ausente: ' + command)
             from gi.repository import Gio
             source = Gio.SettingsSchemaSource.get_default()

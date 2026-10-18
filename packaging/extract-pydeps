@@ -1,0 +1,73 @@
+#!/usr/bin/python3
+"""Monta pydeps/ a partir de .deb beige pré-baixados, conforme o manifesto.
+
+O .deb obtém python3-dbus/python3-gi pelo gerenciador de dependências; o
+pacote Linyaps não tem gerenciador no alvo, então o build embarca cópias
+podadas. As entradas pydeps/ de files_optional em resources.json são a
+lista autoritativa: um arquivo listado e ausente nos .deb falha o build.
+
+uso: extract-pydeps <destino> <diretório-de-debs> <resources.json>
+"""
+import json
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+# De caminhos de manifesto sob pydeps/ para caminhos dentro do usr/ extraído.
+MAPPING = [
+    ('pydeps/dist-packages/', 'usr/lib/python3/dist-packages/'),
+    ('pydeps/girepository-1.0/', 'usr/lib/x86_64-linux-gnu/girepository-1.0/'),
+    ('pydeps/lib/', 'usr/lib/x86_64-linux-gnu/'),
+]
+PREFIX = 'pydeps/'
+
+
+def source_for(name):
+    for prefix, extracted in MAPPING:
+        if name.startswith(prefix):
+            return extracted + name[len(prefix):]
+    raise SystemExit('Entrada pydeps fora das regras de extração: ' + name)
+
+
+def install_entries(entries, extracted, destination):
+    """Copiar cada entrada do manifesto a partir da árvore usr/ extraída."""
+    destination.mkdir(parents=True, exist_ok=True)
+    missing = []
+    for name in entries:
+        source = extracted / source_for(name)
+        # copyfile segue o link (libgirepository .so.1 → .so.1.0.0); o
+        # runtime do DeepWin veda symlinks, então o conteúdo é copiado.
+        if not source.is_file() or source.is_symlink():
+            missing.append(name)
+            continue
+        target = destination / name[len(PREFIX):]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+    if missing:
+        raise SystemExit('Entradas pydeps ausentes nos .deb beige:\n' + '\n'.join(missing))
+    return len(entries)
+
+
+def main():
+    if len(sys.argv) != 4:
+        raise SystemExit('uso: extract-pydeps <destino> <diretório-de-debs> <resources.json>')
+    destination = Path(sys.argv[1])
+    debs = sorted(Path(sys.argv[2]).glob('*.deb'))
+    manifest = json.loads(Path(sys.argv[3]).read_text())
+    entries = [name for name in manifest.get('files_optional', [])
+               if name.startswith(PREFIX)]
+    if not debs:
+        raise SystemExit('Nenhum .deb encontrado em ' + sys.argv[2])
+    if not entries:
+        raise SystemExit('resources.json não lista entradas pydeps/.')
+    with tempfile.TemporaryDirectory(prefix='pydeps-extract-') as temporary:
+        for deb in debs:
+            subprocess.run(['dpkg-deb', '-x', str(deb), temporary], check=True)
+        count = install_entries(entries, Path(temporary), destination)
+    print('pydeps:', count, 'arquivos em', destination)
+
+
+if __name__ == '__main__':
+    main()
