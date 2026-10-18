@@ -1,24 +1,74 @@
 # Continuidade do desenvolvimento do DeepWin
 
-Registro de passagem em **17/10/2026**, a pedido do mantenedor. O trabalho foi
-interrompido para documentação, sem retomar a implementação após esse pedido.
+Registro de passagem iniciado em **17/10/2026** e atualizado a cada retomada;
+as seções antigas são história executada e ficam intactas. A seção seguinte é
+o ponto de partida atual para o próximo agente.
 
 ## Ponto de partida para o próximo agente
 
-- Repositório: <https://github.com/eduardodaluz/deepWin>, branch `main`.
-- `HEAD` e a referência local `origin/main` apontam para
-  `3ed84646b64a77936a751bbfd186f057fae1f8fd` — planejamento dos três formatos.
-  Essa comparação não consultou novamente o servidor remoto.
-- A implementação de empacotamento descrita abaixo está no diretório de
-  trabalho, **sem commit e sem push**. Há arquivos novos ainda não rastreados.
-  Preserve essas alterações; não comece com reset/clean nem apenas com um clone
-  remoto, que ainda não contém essa implementação.
-- Prioridade autorizada: fase 1 `.deb`; depois fase 2 Linyaps/Linglong `.uab`;
-  por último fase 3 portátil `.tar.xz`. As fases 2 e 3 continuam no planejamento.
-- Há um `.deb` local de teste, mas **a fase 1 ainda não está concluída**.
-  Não foi publicado release, tag ou instalador para distribuição.
-- O usuário escolheu licença **MIT** e autorizou o e-mail público de mantenedor
-  **eduardo.r.luz@gmail.com** nos metadados. Esses pontos já estão resolvidos.
+Atualizado em **18/10/2026**, no encerramento do dia em que as fases 1 e 2
+foram concluídas e aceitas.
+
+- Repositório: <https://github.com/eduardodaluz/deepWin>, branch `main`,
+  HEAD `d265ac2` com `origin/main` igual. **Nenhum commit contém linha de
+  coautoria do Claude**: o mantenedor pediu a remoção (seis commits
+  reescritos com árvores idênticas e force push com lease) e commits novos
+  devem sair sem o trailer.
+- **Fase 1 (.deb): concluída e publicada em CI.** Candidato
+  `devedu.deepin-configs_1.1.0-3_amd64.deb`; workflow Debian verde em todos
+  os pushes; aceite em VM completo (adendo de 18/10).
+- **Fase 2 (Linyaps `.uab`): concluída e aceita em VM.** Candidato atual
+  `devedu.deepin-configs_1.1.0.0_x86_64_main.uab`, sha256
+  `de77d61478d540d837d2c6bf5026cf0fd09cc7c587cde41c8311786b06e8bc87` — este é
+  o build com o pin `org.deepin.runtime.dtk/25.2.2` e os fixes de
+  `XDG_DATA_DIRS`; o `8a68fdd8…` citado no adendo da fase 2 foi o build
+  intermediário em 6.7.0. Os sete critérios da L2 têm evidência (adendos
+  seguintes).
+- **Único item aberto da fase 2: o job `Linyaps package` na CI.** Falha nos
+  três pushes sempre no mesmo ponto — o `docker pull` de
+  `registry.cn-hangzhou.aliyuncs.com/linyaps/builder:1.13.8_amd64` não chega
+  aos runners do GitHub; o mesmo `bin/build-uab` passa nesta máquina. O
+  build do projeto não falhou. Correção recomendada: espelhar a imagem do
+  builder para o ghcr.io do mantenedor (`docker tag` + `docker push` a
+  partir daqui), acrescentar override `DEEPWIN_BUILDER_IMAGE` em
+  `bin/build-uab` e separar o pull em passo próprio com retentativa.
+- **Fase 3 (portátil `.tar.xz`): não iniciada** — é a próxima após a CI do
+  Linyaps fechar; a base comum (runtime persistente, staging, migração) já
+  está estável e reutilizada pelos dois formatos prontos.
+- **Sem release, tag ou instalador publicado**: os artefatos existem como
+  artefatos de CI e em `dist/` local. Publicar o primeiro Release é decisão
+  do mantenedor.
+- Ambiente preservado: VM de aceite **desligada** em `~/deepwin-vm/`
+  (quando no ar, SSH porta 2222, usuário `deepwin` com sudo NOPASSWD;
+  para tocar a sessão gráfica por SSH, exportar `DISPLAY=:0`,
+  `XDG_SESSION_TYPE=x11`, `XDG_RUNTIME_DIR=/run/user/1000` e
+  `DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus`; grab do teclado
+  no QEMU é Ctrl+Alt+G). Volume Docker `ll-builder-cache` (~2 GB com Base e
+  Runtime develop) mantém os builds `--offline` rápidos. Em `/tmp` da VM há
+  um backup do stub de unidade removido (`/tmp/stub-backup/`), descartável.
+- Monitores de CI sem autenticação: a API pública rate-limita a 60 req/h —
+  pollar a cada 5-8 minutos. Logs de run exigem auth; o workflow do UAB já
+  publica a cauda do `build.log` como anotação de erro, legível sem auth em
+  `check-runs/{id}/annotations`.
+
+Restrições permanentes: licença MIT; e-mail `eduardo.r.luz@gmail.com` é
+público por escolha expressa; ordem dos formatos `.deb` → Linyaps →
+portátil; nunca embutir caminhos pessoais, backups, chaves ou downloads do
+Claude em pacotes ou documentação pública; preservar dados XDG, wrappers e
+unidades customizadas — conflitos se informam, nunca se sobrescrevem.
+
+Sequência sugerida para a próxima passagem:
+
+1. Espelhar a imagem do builder para o ghcr e acrescentar o override em
+   `bin/build-uab`; rodar a CI até o `Linyaps package` ficar verde.
+2. Decidir com o mantenedor o primeiro Release (`.deb` + `.uab` + checksums
+   + requisitos de runtime na página).
+3. Iniciar a fase 3 conforme o [plano](plano-distribuicao-deepwin.md).
+4. Itens menores registrados: reboot completo da VM como teste
+   complementar (autologin não confirmado), decisão de submeter o `.uab` à
+   loja Linyaps (etapa distinta da geração do pacote), e reavaliar a
+   privatização de `XDG_*_HOME` quando sair a próxima minor do linyaps
+   (1.15+).
 
 ## Funcionalidades anteriores ao empacotamento
 
@@ -228,7 +278,7 @@ O pacote existente é anterior às últimas edições do launcher e da migraçã
 backend. A preparação normalizada do contexto Docker de `bin/build-deb` também
 precisa de validação pelo caminho completo sem `--reuse-image`.
 
-## Sequência sugerida para retomar
+## Sequência sugerida na passagem de 17/10 (executada; mantida como registro)
 
 1. Ler este documento, o diff e os arquivos novos. Preservar as escolhas MIT,
    e-mail público e ordem dos três formatos.
