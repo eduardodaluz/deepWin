@@ -6,7 +6,7 @@ o ponto de partida atual para o próximo agente.
 
 ## Ponto de partida para o próximo agente
 
-Atualizado em **18/10/2026**, na retomada da correção da CI do Linyaps.
+Atualizado em **18/10/2026**, após concluir a CI do Linyaps.
 
 - Repositório: <https://github.com/eduardodaluz/deepWin>, branch `main`,
   base desta retomada `471a2dd`, com `origin/main` igual antes das alterações.
@@ -15,10 +15,10 @@ Atualizado em **18/10/2026**, na retomada da correção da CI do Linyaps.
   reescritos com árvores idênticas e force push com lease) e commits novos
   devem sair sem o trailer.
 - O mantenedor **autorizou explicitamente o push à `main`** após a rejeição
-  automática inicial. Os commits foram enviados e o download do builder no
-  runner passou pelo GHCR. Dois bloqueios seguintes foram diagnosticados:
-  restrição de user namespaces e propriedade UID 1001/1000 do staging.
-  Ajustes implementados e validados localmente; falta confirmar o novo run.
+  automática inicial. Código validado nos dois workflows: `fa99d90`.
+  **CI Debian e Linyaps verdes**, com os artefatos publicados nos runs
+  [39177256036](https://github.com/eduardodaluz/deepWin/actions/runs/39177256036)
+  e [39177256037](https://github.com/eduardodaluz/deepWin/actions/runs/39177256037).
 - **Fase 1 (.deb): concluída e publicada em CI.** Candidato
   `devedu.deepin-configs_1.1.0-3_amd64.deb`; workflow Debian verde em todos
   os pushes; aceite em VM completo (adendo de 18/10).
@@ -29,11 +29,11 @@ Atualizado em **18/10/2026**, na retomada da correção da CI do Linyaps.
   `XDG_DATA_DIRS`; o `8a68fdd8…` citado no adendo da fase 2 foi o build
   intermediário em 6.7.0. Os sete critérios da L2 têm evidência (adendos
   seguintes).
-- **Único item aberto da fase 2: o job `Linyaps package` na CI.** O pull no
-  runner passou após o espelhamento; a CI revelou mais duas diferenças em
-  relação ao host de desenvolvimento (namespaces e UID do staging), agora
-  corrigidas. Build completo em staging UID 1001 passou localmente, incluindo
-  smoke/export e restauração de propriedade. **Implementado nesta retomada:**
+- **CI da fase 2 concluída.** O pull no runner passou após o espelhamento;
+  a CI revelou mais duas diferenças em relação ao host de desenvolvimento
+  (namespaces e UID do staging), corrigidas e validadas localmente e no
+  runner limpo. Build, smoke tests, exportação e upload passaram.
+  **Implementado nesta retomada:**
   override `DEEPWIN_BUILDER_IMAGE`, origem fixada por digest, pull separado
   com três tentativas limitadas e logs anexados mesmo em falha. A variável
   de repositório `DEEPWIN_BUILDER_IMAGE` permite trocar a origem.
@@ -42,12 +42,13 @@ Atualizado em **18/10/2026**, na retomada da correção da CI do Linyaps.
   O workflow usa esse digest como padrão. **A imagem é pública e o pull
   anônimo pelo digest passou**, usando configuração Docker temporária vazia.
   Procedimento em [packaging/linyaps-builder.md](packaging/linyaps-builder.md).
-- **Fase 3 (portátil `.tar.xz`): não iniciada** — é a próxima após a CI do
-  Linyaps fechar; a base comum (runtime persistente, staging, migração) já
-  está estável e reutilizada pelos dois formatos prontos.
+- **Fase 3 (portátil `.tar.xz`): não iniciada; condição de entrada satisfeita.**
+  É a próxima implementação. A base comum (runtime persistente, staging,
+  migração) está estável e reutilizada pelos dois formatos prontos.
 - **Sem release, tag ou instalador publicado**: os artefatos existem como
   artefatos de CI e em `dist/` local. Publicar o primeiro Release é decisão
-  do mantenedor.
+  do mantenedor. Há um [rascunho das notas](packaging/release-notes-1.1.0.md)
+  preparado para revisão.
 - Ambiente preservado: VM de aceite **desligada** em `~/deepwin-vm/`
   (quando no ar, SSH porta 2222, usuário `deepwin` com sudo NOPASSWD;
   para tocar a sessão gráfica por SSH, exportar `DISPLAY=:0`,
@@ -69,13 +70,10 @@ unidades customizadas — conflitos se informam, nunca se sobrescrevem.
 
 Sequência sugerida para a próxima passagem:
 
-1. Enviar a correção autorizada e rodar a CI até o `Linyaps package` ficar
-   verde. Espelho público e pull anônimo já confirmados. O workflow seleciona o digest
-   do GHCR sem exigir configuração de variável; consultar o adendo mais recente.
-2. Decidir com o mantenedor o primeiro Release (`.deb` + `.uab` + checksums
+1. Decidir com o mantenedor o primeiro Release (`.deb` + `.uab` + checksums
    + requisitos de runtime na página).
-3. Iniciar a fase 3 conforme o [plano](plano-distribuicao-deepwin.md).
-4. Itens menores registrados: reboot completo da VM como teste
+2. Iniciar a fase 3 conforme o [plano](plano-distribuicao-deepwin.md).
+3. Itens menores registrados: reboot completo da VM como teste
    complementar (autologin não confirmado), decisão de submeter o `.uab` à
    loja Linyaps (etapa distinta da geração do pacote), e reavaliar a
    privatização de `XDG_*_HOME` quando sair a próxima minor do linyaps
@@ -738,3 +736,29 @@ Validação real em Docker, não apenas simulação:
 Log da prova completa: `/tmp/deepwin-uab-uid-fix-build.log`. O UAB dessa prova
 ficou no staging descartável; o candidato existente em `dist/` não foi
 substituído. Correção pronta para enviar ao próximo run da CI.
+
+## CI Debian e Linyaps concluída — 18/10/2026
+
+O commit de código `fa99d90` passou nos dois workflows em runners limpos:
+
+| Workflow | Resultado | Artefato |
+| --- | --- | --- |
+| [Debian package — 39177256036](https://github.com/eduardodaluz/deepWin/actions/runs/39177256036) | Sucesso, incluindo build/CTest/Lintian e verificação de instalação limpa | `deepwin-deb-amd64`, ID `12154851428` |
+| [Linyaps package — 39177256037](https://github.com/eduardodaluz/deepWin/actions/runs/39177256037) | Sucesso: pull GHCR, build, smoke tests, exportação e upload | `deepwin-uab-amd64`, ID `12154624527` |
+| Logs do Linyaps no mesmo run | Upload aprovado | `deepwin-uab-logs`, ID `12154704117` |
+
+O build Linyaps com cache vazio levou aproximadamente 7 min 16 s. A API
+confirmou os três artefatos disponíveis e não expirados. Cada workflow
+inclui os checksums dos pacotes; os digests exibidos pela API de artefatos
+são dos arquivos ZIP do Actions, não o SHA-256 do `.deb` ou `.uab` isolado.
+
+Com isso, a última pendência da fase 2 foi encerrada. README, plano e ponto
+de partida deste documento foram atualizados. As seções anteriores desta
+passagem continuam como histórico dos diagnósticos e bloqueios superados.
+O rascunho `packaging/release-notes-1.1.0.md` prepara a próxima decisão do
+mantenedor, sem publicar Release nem criar tag. Fase 3 está liberada para
+iniciar, mas não foi implementada nesta correção da CI.
+
+O commit seguinte altera apenas documentação; os testes e o build validados
+são os do código `fa99d90`. Não é necessário repetir os builds por essas
+edições documentais.

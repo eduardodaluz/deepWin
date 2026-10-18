@@ -98,8 +98,10 @@ instalação de versões do Claude pelo seletor da GUI fica indisponível (sem
 executa no host. O candidato foi aceito em VM Deepin 25.2.0 com Linyaps
 1.13.7, incluindo os dez recursos e a preservação dos helpers após remoção.
 A série Base/Runtime 25.2.2 deve estar instalada; a instalação de um arquivo
-UAB não baixa esses componentes automaticamente. Ainda falta concluir a CI
-do Linyaps e decidir a primeira publicação em Releases.
+UAB não baixa esses componentes automaticamente. O workflow Linyaps gera o
+UAB com checksum e passou também no runner limpo do GitHub. A primeira
+publicação em Releases ainda depende de decisão do mantenedor; há um
+[rascunho das notas](packaging/release-notes-1.1.0.md) para revisão.
 
 ### Instalação pelo código-fonte
 
@@ -213,8 +215,8 @@ O [plano de distribuição](plano-distribuicao-deepwin.md) organiza as entregas
 em três fases: **1. `.deb`**, **2. Linyaps/Linglong (`.uab`)** e
 **3. portátil (`.tar.xz`)**. O alvo inicial é Deepin 25 em amd64, com os mesmos
 ajustes e backups por usuário. A fase 1 está validada e publicada em CI; a
-fase 2 tem o candidato `.uab` aceito em VM e aguarda a CI do Linyaps ficar
-verde; a fase 3 permanece planejada.
+fase 2 tem o candidato `.uab` aceito em VM e workflow Linyaps verde, com
+artefato e checksum disponíveis na CI. A fase 3 permanece planejada.
 
 ### Runtime persistente e restauração
 

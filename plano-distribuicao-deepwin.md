@@ -3,8 +3,8 @@
 Status em 18/10/2026: fase 1 concluída — validada em VM Deepin 25.2.0 com
 sessão gráfica completa e Solid ativo (D6), commits publicados e workflow do
 GitHub Actions verde com artefato; candidato
-`devedu.deepin-configs_1.1.0-3_amd64.deb`. Fase 2 iniciada e com a L1
-concluída: a [matriz de acesso Linyaps](matriz-acesso-linyaps.md) registra a
+`devedu.deepin-configs_1.1.0-3_amd64.deb`. Fase 2 concluída, com L1 e L2
+implementadas: a [matriz de acesso Linyaps](matriz-acesso-linyaps.md) registra a
 prova empírica de que o container alcança a sessão hospedeira (D-Bus de
 sessão, systemd do usuário, `$HOME` real, rootfs do host em leitura) e a
 decisão por acesso direto. O candidato
@@ -16,7 +16,11 @@ proteção de unidade personalizada, remoção preservando serviços e
 `deepwin-restore`, e provas visuais humanas (prévias da dock, vírgula,
 atalhos, colagem). O runtime foi fixado na série 25.2.2 porque instalar
 UAB não puxa Base/Runtime do repositório e a série stock já está presente.
-Pende apenas o job Linyaps no GitHub Actions ficar verde; a fase 3 segue. O diagnóstico e os checklists abaixo registram o plano
+[CI Linyaps aprovada](https://github.com/eduardodaluz/deepWin/actions/runs/39177256037),
+com build, smoke tests, exportação e upload do UAB com checksum. O builder
+foi espelhado publicamente no GHCR; o workflow inclui os ajustes de
+namespaces e de UID do staging exigidos pelo runner. A fase 3 pode iniciar.
+O diagnóstico e os checklists abaixo registram o plano
 original; consulte a [passagem de desenvolvimento](continuidade-desenvolvimento.md)
 para o estado efetivo, os testes realizados e as pendências antes de marcar
 entregas concluídas.
@@ -285,17 +289,18 @@ ajustes funcionais mesmo que o diretório portátil seja movido ou removido.
 ## Decisões pendentes e próxima entrega
 
 O mantenedor escolheu MIT e autorizou `eduardo.r.luz@gmail.com` como e-mail
-público do pacote. `LICENSE` e os metadados correspondentes já foram preparados
-na implementação local, ainda sem commit na data desta passagem.
+público do pacote. A licença e os metadados já estão versionados.
 
-Também permanecem para validação: versões mínimas exatas, ambiente de CI Deepin,
-versão de Base/Runtime Linyaps e composição final das bibliotecas portáteis.
-Essas definições não impedem iniciar D1, mas fazem parte do aceite das releases.
+O `.deb` 1.1.0-3 está validado em imagem limpa e em VM com sessão gráfica
+completa, com build e verificação publicados em CI. O UAB 1.1.0.0 foi aceito
+na mesma VM, usando Base e Runtime DTK da série 25.2.2; o workflow Linyaps
+também passou em runner limpo, com artefato e checksum disponíveis.
 
-A implementação local já inclui build comum, staging, resolução de caminhos,
-migração/ativação de integrações e um `.deb` validado em imagem limpa e em VM
-com sessão gráfica completa. A próxima entrega é o commit/push do candidato
-1.1.0-3 e a execução do workflow no GitHub. A revisão da ABI do plugin da
-calculadora permanece como condição para ampliar plataformas (referência
-testada: Qt 6.8 do Deepin 25). A fase 2 só avança após o aceite da fase 1;
-a fase 3 segue a fase 2.
+Falta a decisão do mantenedor sobre publicar o primeiro Release com `.deb`,
+`.uab`, checksums e requisitos de runtime. Há um
+[rascunho das notas](packaging/release-notes-1.1.0.md) preparado para revisão.
+A composição das
+bibliotecas portáteis será definida na fase 3. A ampliação de plataformas
+exige reavaliar a ABI do plugin da calculadora (referência testada: Qt 6.8
+do Deepin 25); o aceite atual não declara suporte genérico a outros desktops
+ou a versões anteriores do Qt.
