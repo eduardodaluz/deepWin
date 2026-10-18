@@ -10,6 +10,16 @@ O registro Aliyun falhou repetidamente nos runners do GitHub, antes da
 compilação. O espelho deve conter a mesma imagem; não há necessidade de
 reconstruir o builder ou copiar o cache de Base/Runtime do volume local.
 
+O espelho publicado em 18/10/2026 tem a referência:
+
+```text
+ghcr.io/eduardodaluz/linyaps-builder@sha256:9170f635112d5068ef815d6e55d6bd3969e668151bd31a33ca48086f53fd372a
+```
+
+O digest do manifesto no destino difere do original; o ID da imagem deve
+permanecer igual. O workflow está preparado para usar esse espelho por
+padrão, após confirmar sua visibilidade pública.
+
 ## Publicar a imagem validada
 
 Em uma máquina que alcance o registro de origem, com Docker autenticado no
@@ -42,8 +52,9 @@ Compare o ID da imagem de origem e o da imagem espelhada com
 
 ## Selecionar o espelho
 
-No GitHub, em Settings → Secrets and variables → Actions → Variables,
-defina `DEEPWIN_BUILDER_IMAGE` como
+O workflow já define o espelho acima como padrão. Para selecionar outra
+imagem, no GitHub, em Settings → Secrets and variables → Actions → Variables,
+defina `DEEPWIN_BUILDER_IMAGE` como, por exemplo,
 `ghcr.io/eduardodaluz/linyaps-builder@sha256:DIGEST_DO_PUSH`.
 Use o digest efetivamente retornado pelo destino. O workflow usa essa
 variável tanto no passo de download quanto em `bin/build-uab`.
@@ -59,6 +70,7 @@ build, omita essa opção. O override troca somente a origem da imagem, sem
 alterar os slots em `linglong.yaml`.
 
 Execute novamente o workflow **Linyaps package** e confirme download,
-build, smoke tests e exportação do artefato. Até o espelho estar acessível,
-a CI mantém a origem oficial como padrão. Remover a variável restaura esse
-padrão. A publicação do builder não publica um Release do DeepWin.
+build, smoke tests e exportação do artefato. Remover a variável restaura o
+espelho padrão no GHCR. Para usar a origem oficial na CI, configure a
+variável com a referência Aliyun do início deste documento.
+A publicação do builder não publica um Release do DeepWin.

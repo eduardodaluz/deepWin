@@ -80,8 +80,9 @@ no builder oficial do Linyaps, com slots fixados (`org.deepin.base/25.2.2` +
 ```
 
 O builder 1.13.8 amd64 é fixado por digest. Para usar um espelho, defina
-`DEEPWIN_BUILDER_IMAGE` com a referência Docker completa. Na CI, a variável
-de repositório com esse mesmo nome seleciona o espelho; o download tem três
+`DEEPWIN_BUILDER_IMAGE` com a referência Docker completa. A CI usa o espelho
+do mantenedor no GHCR, também fixado por digest; a variável de repositório
+com esse mesmo nome permite trocar a origem. O download tem três
 tentativas de até três minutos, em passo separado. Os logs de download e
 build são anexados ao run mesmo quando ele falha. O procedimento de
 espelhamento está em [packaging/linyaps-builder.md](packaging/linyaps-builder.md).

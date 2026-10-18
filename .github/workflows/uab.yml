@@ -10,8 +10,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # Configure a variável do repositório após publicar e validar o espelho.
-      DEEPWIN_BUILDER_IMAGE: ${{ vars.DEEPWIN_BUILDER_IMAGE || 'registry.cn-hangzhou.aliyuncs.com/linyaps/builder@sha256:1ef5b6244f3a7f8b2227e88d171bd0b6cda7cb7c4310a609a70a70e35f08b85b' }}
+      # Espelho do builder oficial; a variável permite trocar a origem.
+      DEEPWIN_BUILDER_IMAGE: ${{ vars.DEEPWIN_BUILDER_IMAGE || 'ghcr.io/eduardodaluz/linyaps-builder@sha256:9170f635112d5068ef815d6e55d6bd3969e668151bd31a33ca48086f53fd372a' }}
     steps:
       - uses: actions/checkout@v4
       - name: Pull Linyaps builder (three bounded attempts)

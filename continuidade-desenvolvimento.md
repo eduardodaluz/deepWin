@@ -35,12 +35,14 @@ Atualizado em **18/10/2026**, na retomada da correção da CI do Linyaps.
   build do projeto não falhou. **Preparação implementada nesta retomada:**
   override `DEEPWIN_BUILDER_IMAGE`, origem fixada por digest, pull separado
   com três tentativas limitadas e logs anexados mesmo em falha. A variável
-  de repositório `DEEPWIN_BUILDER_IMAGE` seleciona o espelho na CI; sem ela,
-  mantém-se a origem oficial. **Espelho ainda não publicado:** não há login
-  Docker/GHCR nesta sessão, e foi solicitado ao mantenedor autenticar em
-  outro terminal. A tag GHCR existe apenas localmente, com ID idêntico ao
-  original. Procedimento em [packaging/linyaps-builder.md](packaging/linyaps-builder.md).
-  Não apontar a CI para uma imagem remota ainda inexistente ou privada.
+  de repositório `DEEPWIN_BUILDER_IMAGE` permite trocar a origem.
+  **Espelho publicado após o login do mantenedor:**
+  `ghcr.io/eduardodaluz/linyaps-builder@sha256:9170f635112d5068ef815d6e55d6bd3969e668151bd31a33ca48086f53fd372a`.
+  O workflow local já usa esse digest como padrão, mas **a imagem ainda
+  está privada**: o primeiro pull anônimo retornou `unauthorized`. Foi
+  solicitado ao mantenedor torná-la pública nas configurações do pacote;
+  repetir o teste anônimo antes de enviar o workflow.
+  Procedimento em [packaging/linyaps-builder.md](packaging/linyaps-builder.md).
 - **Fase 3 (portátil `.tar.xz`): não iniciada** — é a próxima após a CI do
   Linyaps fechar; a base comum (runtime persistente, staging, migração) já
   está estável e reutilizada pelos dois formatos prontos.
@@ -68,11 +70,11 @@ unidades customizadas — conflitos se informam, nunca se sobrescrevem.
 
 Sequência sugerida para a próxima passagem:
 
-1. Concluir o login no GHCR, publicar a imagem já etiquetada localmente,
-   torná-la pública e validar pull anônimo. Configurar a variável do
-   repositório `DEEPWIN_BUILDER_IMAGE` com o digest retornado pelo GHCR;
-   rodar a CI até o `Linyaps package` ficar verde. Override e retentativas
-   já estão implementados; consultar o adendo mais recente.
+1. Tornar pública a imagem já publicada no GHCR e validar pull anônimo.
+   Obter autorização explícita para `git push origin main`, ainda pendente
+   após a rejeição automática; enviar a correção e rodar a CI até o
+   `Linyaps package` ficar verde. O workflow local já seleciona o digest
+   do GHCR sem exigir configuração de variável; consultar o adendo mais recente.
 2. Decidir com o mantenedor o primeiro Release (`.deb` + `.uab` + checksums
    + requisitos de runtime na página).
 3. Iniciar a fase 3 conforme o [plano](plano-distribuicao-deepwin.md).
@@ -641,3 +643,32 @@ confirmação de run verde. A revisão automática rejeitou o comando
 remota que requer autorização explícita; nenhum push foi realizado.
 A tag GHCR local **não comprova** publicação nem pull pela rede. Fase 3
 não iniciada e nenhum Release/tag publicado.
+
+## Espelho publicado após autenticação — 18/10/2026
+
+O mantenedor concluiu `docker login ghcr.io -u eduardodaluz` usando um PAT
+clássico com `write:packages`, e o push de
+`ghcr.io/eduardodaluz/linyaps-builder:1.13.8_amd64` terminou com sucesso.
+O digest retornado pelo GHCR foi
+`sha256:9170f635112d5068ef815d6e55d6bd3969e668151bd31a33ca48086f53fd372a`.
+O digest do manifesto mudou no destino; a identidade do conteúdo é conferida
+pelo ID Docker da imagem. O pull autenticado pelo digest teve sucesso, e o
+ID retornado coincide com o original:
+`30bb6af47cf2e1a8d56700900933934733383c6b286c4bf6c09ef3d0f6d5b6c5`.
+
+O teste com `docker --config <diretório temporário vazio> pull <digest>`
+retornou `unauthorized`: o pacote nasceu privado. Foi solicitado ao
+mantenedor abrir
+<https://github.com/users/eduardodaluz/packages/container/linyaps-builder/settings>
+e mudar a visibilidade para **Public**. Repetir o pull anônimo depois da
+confirmação. Não há token ou outra credencial gravada no projeto.
+
+O workflow local foi preparado para usar o digest do GHCR por padrão,
+mantendo o override via variável de repositório; não é mais necessário
+criar a variável para selecionar o espelho do mantenedor. YAML e todos os
+blocos Bash do workflow passaram na validação sintática.
+
+O envio dos commits à `main` continua aguardando autorização explícita,
+solicitada novamente nesta retomada por causa da rejeição automática anterior.
+O sucesso do login Docker informado pelo mantenedor autoriza prosseguir com
+o espelhamento, mas não foi tratado como aprovação do push ao Git.
