@@ -516,3 +516,16 @@ Win+Shift+S, colagem Win+V + Enter, e workspaces Ctrl+Win+←/→. Com isso,
 todos os critérios de aceite da fase 2 estão satisfeitos, pendendo apenas o
 job do GitHub Actions para o `.uab` no commit `e0877d1` (o workflow passou a
 publicar o log de falha como anotação depois do primeiro run cego).
+
+Encerramento do dia: o job Debian ficou verde em todos os pushes, mas o job
+Linyaps falhou nos três (`0f7199d`, `e0877d1`, `ed6a057`) sempre no mesmo
+ponto — a cauda do log publicada como anotação mostra o `docker pull` de
+`registry.cn-hangzhou.aliyuncs.com/linyaps/builder` começando e o runner
+morrendo ali. O mesmo `bin/build-uab` passa na máquina local, então a falha
+é o registro da Aliyun acessado dos runners americanos do GitHub, não o
+build. Correção recomendada para a próxima passagem: espelhar a imagem do
+builder para o ghcr.io da conta do mantenedor (`docker tag` + `docker push`
+a partir desta máquina) e acrescentar um override de ambiente (ex.
+`DEEPWIN_BUILDER_IMAGE`) em `bin/build-uab` para o CI usá-lo; em paralelo,
+separar o pull em passo próprio com retentativas. A fase 2 segue aceita em
+VM; o único item aberto é esse espelhamento de imagem na CI.
