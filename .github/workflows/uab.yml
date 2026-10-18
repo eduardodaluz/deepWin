@@ -1,0 +1,21 @@
+name: Linyaps package
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build UAB in the official Linyaps builder
+        run: ./bin/build-uab
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deepwin-uab-amd64
+          path: |
+            dist/*.uab
+            dist/*.sha256
