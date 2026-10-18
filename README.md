@@ -72,23 +72,33 @@ painel opera sem ponte adicional.
 
 Para gerar o artefato, basta Docker no host de build; o build inteiro acontece
 no builder oficial do Linyaps, com slots fixados (`org.deepin.base/25.2.2` +
-`org.deepin.runtime.dtk/6.7.0`) e cache de camadas em um volume nomeado:
+`org.deepin.runtime.dtk/25.2.2`) e cache de camadas em um volume nomeado:
 
 ```bash
 ./bin/build-uab            # primeira execução baixa os slots (~2 GB de cache)
 ./bin/build-uab --offline  # reusa o cache já preparado
 ```
 
+O builder 1.13.8 amd64 é fixado por digest. Para usar um espelho, defina
+`DEEPWIN_BUILDER_IMAGE` com a referência Docker completa. Na CI, a variável
+de repositório com esse mesmo nome seleciona o espelho; o download tem três
+tentativas de até três minutos, em passo separado. Os logs de download e
+build são anexados ao run mesmo quando ele falha. O procedimento de
+espelhamento está em [packaging/linyaps-builder.md](packaging/linyaps-builder.md).
+
 O `.uab` e o checksum ficam em `dist/`. No alvo com Deepin 25, que já traz o
-ambiente Linyaps, instale com `ll-cli install ./devedu.deepin-configs_*.uab`
+ambiente Linyaps, instale com `sudo ll-cli install ./devedu.deepin-configs_*.uab`
 ou pelo instalador gráfico. As dependências Python (`python3-dbus`,
 `python3-gi`) não existem no runtime Linyaps e viajam extraídas dos debs
 beige dentro do pacote, carregadas por um bootstrap no backend e no helper de
 colagem; no `.deb` elas continuam vindo por `Depends`. No pacote Linyaps, a
 instalação de versões do Claude pelo seletor da GUI fica indisponível (sem
 `npm` no sandbox); o comando `zclaude` do terminal segue funcionando, pois
-executa no host. O aceite em VM Deepin 25 limpa permanece pendente; até lá,
-trate o `.uab` como versão de teste.
+executa no host. O candidato foi aceito em VM Deepin 25.2.0 com Linyaps
+1.13.7, incluindo os dez recursos e a preservação dos helpers após remoção.
+A série Base/Runtime 25.2.2 deve estar instalada; a instalação de um arquivo
+UAB não baixa esses componentes automaticamente. Ainda falta concluir a CI
+do Linyaps e decidir a primeira publicação em Releases.
 
 ### Instalação pelo código-fonte
 
@@ -202,8 +212,8 @@ O [plano de distribuição](plano-distribuicao-deepwin.md) organiza as entregas
 em três fases: **1. `.deb`**, **2. Linyaps/Linglong (`.uab`)** e
 **3. portátil (`.tar.xz`)**. O alvo inicial é Deepin 25 em amd64, com os mesmos
 ajustes e backups por usuário. A fase 1 está validada e publicada em CI; a
-fase 2 tem a prova de integração concluída e candidato `.uab` gerado, pendente
-de aceite em VM; a fase 3 permanece planejada.
+fase 2 tem o candidato `.uab` aceito em VM e aguarda a CI do Linyaps ficar
+verde; a fase 3 permanece planejada.
 
 ### Runtime persistente e restauração
 

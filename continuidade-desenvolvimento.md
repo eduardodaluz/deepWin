@@ -6,14 +6,18 @@ o ponto de partida atual para o próximo agente.
 
 ## Ponto de partida para o próximo agente
 
-Atualizado em **18/10/2026**, no encerramento do dia em que as fases 1 e 2
-foram concluídas e aceitas.
+Atualizado em **18/10/2026**, na retomada da correção da CI do Linyaps.
 
 - Repositório: <https://github.com/eduardodaluz/deepWin>, branch `main`,
-  HEAD `d265ac2` com `origin/main` igual. **Nenhum commit contém linha de
+  base desta retomada `471a2dd`, com `origin/main` igual antes das alterações.
+  Consulte `git log -1` para o commit atual. **Nenhum commit contém linha de
   coautoria do Claude**: o mantenedor pediu a remoção (seis commits
   reescritos com árvores idênticas e force push com lease) e commits novos
   devem sair sem o trailer.
+- Alterações desta retomada estão **commitadas apenas localmente**.
+  `git push origin main` foi rejeitado pela revisão automática: ela exige
+  autorização explícita do mantenedor para alterar a branch padrão.
+  `origin/main` permanece em `471a2dd`; não há run da CI com estas mudanças.
 - **Fase 1 (.deb): concluída e publicada em CI.** Candidato
   `devedu.deepin-configs_1.1.0-3_amd64.deb`; workflow Debian verde em todos
   os pushes; aceite em VM completo (adendo de 18/10).
@@ -28,10 +32,15 @@ foram concluídas e aceitas.
   três pushes sempre no mesmo ponto — o `docker pull` de
   `registry.cn-hangzhou.aliyuncs.com/linyaps/builder:1.13.8_amd64` não chega
   aos runners do GitHub; o mesmo `bin/build-uab` passa nesta máquina. O
-  build do projeto não falhou. Correção recomendada: espelhar a imagem do
-  builder para o ghcr.io do mantenedor (`docker tag` + `docker push` a
-  partir daqui), acrescentar override `DEEPWIN_BUILDER_IMAGE` em
-  `bin/build-uab` e separar o pull em passo próprio com retentativa.
+  build do projeto não falhou. **Preparação implementada nesta retomada:**
+  override `DEEPWIN_BUILDER_IMAGE`, origem fixada por digest, pull separado
+  com três tentativas limitadas e logs anexados mesmo em falha. A variável
+  de repositório `DEEPWIN_BUILDER_IMAGE` seleciona o espelho na CI; sem ela,
+  mantém-se a origem oficial. **Espelho ainda não publicado:** não há login
+  Docker/GHCR nesta sessão, e foi solicitado ao mantenedor autenticar em
+  outro terminal. A tag GHCR existe apenas localmente, com ID idêntico ao
+  original. Procedimento em [packaging/linyaps-builder.md](packaging/linyaps-builder.md).
+  Não apontar a CI para uma imagem remota ainda inexistente ou privada.
 - **Fase 3 (portátil `.tar.xz`): não iniciada** — é a próxima após a CI do
   Linyaps fechar; a base comum (runtime persistente, staging, migração) já
   está estável e reutilizada pelos dois formatos prontos.
@@ -59,8 +68,11 @@ unidades customizadas — conflitos se informam, nunca se sobrescrevem.
 
 Sequência sugerida para a próxima passagem:
 
-1. Espelhar a imagem do builder para o ghcr e acrescentar o override em
-   `bin/build-uab`; rodar a CI até o `Linyaps package` ficar verde.
+1. Concluir o login no GHCR, publicar a imagem já etiquetada localmente,
+   torná-la pública e validar pull anônimo. Configurar a variável do
+   repositório `DEEPWIN_BUILDER_IMAGE` com o digest retornado pelo GHCR;
+   rodar a CI até o `Linyaps package` ficar verde. Override e retentativas
+   já estão implementados; consultar o adendo mais recente.
 2. Decidir com o mantenedor o primeiro Release (`.deb` + `.uab` + checksums
    + requisitos de runtime na página).
 3. Iniciar a fase 3 conforme o [plano](plano-distribuicao-deepwin.md).
@@ -579,3 +591,53 @@ a partir desta máquina) e acrescentar um override de ambiente (ex.
 `DEEPWIN_BUILDER_IMAGE`) em `bin/build-uab` para o CI usá-lo; em paralelo,
 separar o pull em passo próprio com retentativas. A fase 2 segue aceita em
 VM; o único item aberto é esse espelhamento de imagem na CI.
+
+## Retomada da CI Linyaps — 18/10/2026, à noite
+
+A base remota e local era `471a2dd`. A última execução pública consultada,
+[39149160166](https://github.com/eduardodaluz/deepWin/actions/runs/39149160166),
+confirmou a falha durante o download das camadas do builder, antes de
+compilar. `gh` não está instalado e não há configuração de login Docker no
+GHCR. O acesso SSH ao GitHub e a conectividade HTTPS com GHCR funcionam
+fora do sandbox. Foi pedido ao mantenedor executar `docker login ghcr.io
+-u eduardodaluz` em outro terminal; não solicitar o token na conversa.
+
+Implementação desta retomada:
+
+- `bin/build-uab` aceita `DEEPWIN_BUILDER_IMAGE`, informa a imagem selecionada
+  no log e fixa o padrão no digest observado da imagem oficial 1.13.8 amd64
+  (`sha256:1ef5b6244f3a7f8b2227e88d171bd0b6cda7cb7c4310a609a70a70e35f08b85b`).
+  O lock passa a cobrir também a preparação do cache dos debs Python.
+- O workflow usa a variável de repositório homônima, com fallback para a
+  origem oficial enquanto o espelho não estiver publicado. O pull foi
+  separado em passo com três tentativas de até 180 s, kill após mais 15 s,
+  e pausa de 15 s entre falhas. `pull.log` e `build.log` viram artefatos
+  mesmo em falha; as anotações escapam `%` e CR e aceitam linha final sem
+  newline ou ausência de um dos logs.
+- `packaging/linyaps-builder.md` documenta publicação do espelho, visibilidade
+  pública, validação anônima e seleção por digest. README corrigido para o
+  runtime 25.2.2, instalação por sudo e aceite em VM já concluído.
+
+Verificações realizadas:
+
+| Verificação | Resultado |
+| --- | --- |
+| Suíte Python | 126 testes, todos passando |
+| Scripts Bash extraídos do workflow | Sintaxe válida; simulações cobriram sucesso imediato, falha seguida de sucesso e três falhas com saída 1 |
+| Anotações de falha | Percentuais, CR, linha final incompleta e logs ausentes tratados corretamente |
+| Imagem oficial × tag local GHCR | Mesmo ID `30bb6af47cf2e1a8d56700900933934733383c6b286c4bf6c09ef3d0f6d5b6c5` |
+| Build completo com `DEEPWIN_BUILDER_IMAGE=ghcr.io/eduardodaluz/linyaps-builder:1.13.8_amd64 ./bin/build-uab --offline` | PASS, incluindo `pydeps OK`, `DeepWin 1.1.0` e exportação UAB |
+
+O novo build local substituiu o arquivo de mesmo nome em `dist/`; SHA-256
+`c78852d7e9a89300a166d3e04a4e56dd133765e45e55909435480905e533fc35`.
+O hash do candidato aceito em VM permanece registrado no início do documento;
+a reconstrução desta retomada não teve novo aceite gráfico. Log completo:
+`/tmp/deepwin-uab-ci-fix-build.log`.
+
+Pendente: autorização explícita para enviar os commits locais à `main`,
+publicação efetiva do espelho (aguarda autenticação GHCR), seleção na CI e
+confirmação de run verde. A revisão automática rejeitou o comando
+`git push origin main` por considerar o envio à branch padrão uma alteração
+remota que requer autorização explícita; nenhum push foi realizado.
+A tag GHCR local **não comprova** publicação nem pull pela rede. Fase 3
+não iniciada e nenhum Release/tag publicado.

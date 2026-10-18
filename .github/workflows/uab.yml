@@ -9,8 +9,26 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Configure a variável do repositório após publicar e validar o espelho.
+      DEEPWIN_BUILDER_IMAGE: ${{ vars.DEEPWIN_BUILDER_IMAGE || 'registry.cn-hangzhou.aliyuncs.com/linyaps/builder@sha256:1ef5b6244f3a7f8b2227e88d171bd0b6cda7cb7c4310a609a70a70e35f08b85b' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Pull Linyaps builder (three bounded attempts)
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            for attempt in 1 2 3; do
+              echo "Pull ${attempt}/3: ${DEEPWIN_BUILDER_IMAGE}"
+              if timeout --kill-after=15s 180s docker pull "$DEEPWIN_BUILDER_IMAGE"; then
+                exit 0
+              fi
+              if [ "$attempt" -lt 3 ]; then sleep 15; fi
+            done
+            exit 1
+          } 2>&1 | tee pull.log
       - name: Build UAB in the official Linyaps builder
         shell: bash
         run: |
@@ -18,10 +36,25 @@ jobs:
           ./bin/build-uab 2>&1 | tee build.log
       - name: Report failure tail
         if: failure()
+        shell: bash
         run: |
-          tail -c 4000 build.log | while IFS= read -r line; do
-            echo "::error::${line:0:400}"
+          for log in pull.log build.log; do
+            [ -f "$log" ] || continue
+            tail -c 4000 "$log" | while IFS= read -r line || [ -n "$line" ]; do
+              line="${line:0:400}"
+              line="${line//'%'/'%25'}"
+              line="${line//$'\r'/'%0D'}"
+              printf '::error::%s\n' "$line"
+            done
           done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deepwin-uab-logs
+          if-no-files-found: ignore
+          path: |
+            pull.log
+            build.log
       - uses: actions/upload-artifact@v4
         with:
           name: deepwin-uab-amd64
