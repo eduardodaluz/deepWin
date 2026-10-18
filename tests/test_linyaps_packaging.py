@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'gui'))
@@ -28,9 +29,31 @@ class BootstrapTests(unittest.TestCase):
     def test_missing_pydeps_directory_makes_no_changes(self):
         path_snapshot = list(sys.path)
         env_snapshot = os.environ.get('GI_TYPELIB_PATH')
-        backend.bootstrap_runtime_python(root=str(self.home / 'absente'))
+        dirs_snapshot = os.environ.get('XDG_DATA_DIRS')
+        host = self.home / 'hostroot'
+        with patch.object(backend, 'HOST_ROOT', str(host)):
+            backend.bootstrap_runtime_python(root=str(self.home / 'absente'))
         self.assertEqual(sys.path, path_snapshot)
         self.assertEqual(os.environ.get('GI_TYPELIB_PATH'), env_snapshot)
+        self.assertEqual(os.environ.get('XDG_DATA_DIRS'), dirs_snapshot)
+
+    def test_host_root_share_dirs_are_prepended_inside_sandbox(self):
+        host = self.home / 'rootfs'
+        (host / 'usr/share').mkdir(parents=True)
+        (host / 'var/lib/linglong/entries/share').mkdir(parents=True)
+        before = os.environ.get('XDG_DATA_DIRS')
+        try:
+            with patch.object(backend, 'HOST_ROOT', str(host)):
+                backend.bootstrap_runtime_python(root=str(self.home / 'absente'))
+            expected = ':'.join([str(host / 'usr/share'),
+                                 str(host / 'var/lib/linglong/entries/share'),
+                                 before or '/usr/local/share:/usr/share'])
+            self.assertEqual(os.environ.get('XDG_DATA_DIRS'), expected)
+        finally:
+            if before is None:
+                os.environ.pop('XDG_DATA_DIRS', None)
+            else:
+                os.environ['XDG_DATA_DIRS'] = before
 
     def test_pydeps_tree_is_registered_for_imports(self):
         base = self.home / 'pydeps'
@@ -39,19 +62,26 @@ class BootstrapTests(unittest.TestCase):
         (base / 'lib' / 'libdeepwin-fake.so.9').write_bytes(b'not an elf file')
         (base / 'girepository-1.0').mkdir(parents=True)
         env_before = os.environ.get('GI_TYPELIB_PATH')
+        dirs_before = os.environ.get('XDG_DATA_DIRS')
         try:
-            backend.bootstrap_runtime_python(root=str(self.home))
+            with patch.object(backend, 'HOST_ROOT', str(self.home / 'hostroot')):
+                backend.bootstrap_runtime_python(root=str(self.home))
             self.assertEqual(sys.path[0], str(base / 'dist-packages'))
             expected = str(base / 'girepository-1.0')
             if env_before:
                 expected = expected + os.pathsep + env_before
             self.assertEqual(os.environ.get('GI_TYPELIB_PATH'), expected)
+            self.assertEqual(os.environ.get('XDG_DATA_DIRS'), dirs_before)
         finally:
             sys.path.remove(str(base / 'dist-packages'))
             if env_before is None:
                 os.environ.pop('GI_TYPELIB_PATH', None)
             else:
                 os.environ['GI_TYPELIB_PATH'] = env_before
+            if dirs_before is None:
+                os.environ.pop('XDG_DATA_DIRS', None)
+            else:
+                os.environ['XDG_DATA_DIRS'] = dirs_before
 
     def test_host_tool_prefers_host_root_and_falls_back_to_path(self):
         host = self.home / 'hostroot'

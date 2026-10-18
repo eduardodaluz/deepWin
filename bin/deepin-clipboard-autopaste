@@ -25,6 +25,14 @@ def bootstrap_runtime_python(root=None):
     Espelha o bootstrap do backend: no .deb as dependências vêm do sistema
     e aqui não faz nada. As importações de dbus/gi são tardias neste script.
     """
+    host = Path('/run/host/rootfs')
+    if host.is_dir():
+        # Os schemas e catálogos da sessão do usuário ficam na raiz do
+        # hospedeiro exposta em leitura, não no rootfs do aplicativo.
+        shares = [str(host / 'usr/share'),
+                  str(host / 'var/lib/linglong/entries/share')]
+        os.environ['XDG_DATA_DIRS'] = ':'.join(shares) + ':' + \
+            os.environ.get('XDG_DATA_DIRS', '/usr/local/share:/usr/share')
     base = Path(root or Path(__file__).resolve().parents[1]) / 'pydeps'
     if not base.is_dir():
         return

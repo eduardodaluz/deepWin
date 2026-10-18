@@ -16,6 +16,9 @@ import time
 import sys
 import tempfile
 
+# Raiz do hospedeiro exposta em leitura dentro de um container Linyaps.
+HOST_ROOT = '/run/host/rootfs'
+
 
 def bootstrap_runtime_python(root=None):
     """Carregar dbus/gi extraídos para o runtime por usuário (pacote Linyaps).
@@ -25,6 +28,15 @@ def bootstrap_runtime_python(root=None):
     código distribuído; a biblioteca nativa é pré-carregada em escopo global
     para que o _gi.so resolva o soname sem LD_LIBRARY_PATH.
     """
+    if Path(HOST_ROOT).is_dir():
+        # Os helpers executam no host; os schemas do dsettings, os launchers
+        # e os catálogos da sessão ficam na raiz do hospedeiro exposta em
+        # leitura, não no rootfs do aplicativo.
+        host = Path(HOST_ROOT)
+        shares = [str(host / 'usr/share'),
+                  str(host / 'var/lib/linglong/entries/share')]
+        os.environ['XDG_DATA_DIRS'] = ':'.join(shares) + ':' + \
+            os.environ.get('XDG_DATA_DIRS', '/usr/local/share:/usr/share')
     base = Path(root or Path(__file__).resolve().parents[1]) / 'pydeps'
     if not base.is_dir():
         return

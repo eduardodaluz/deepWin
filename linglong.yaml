@@ -12,9 +12,11 @@ command:
   - deepwin
 
 # Slots da série 25 usados pelos apps da deepin; a referência com três
-# dígitos permite atualização do quarto dígito pelo gerenciador.
+# dígitos permite atualização do quarto dígito pelo gerenciador. O runtime
+# segue a série que uma instalação stock do Deepin 25 já carrega (prova em
+# VM), porque o UAB não puxa o runtime do repo na instalação.
 base: org.deepin.base/25.2.2
-runtime: org.deepin.runtime.dtk/6.7.0
+runtime: org.deepin.runtime.dtk/25.2.2
 
 source:
   - kind: local
