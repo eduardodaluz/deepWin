@@ -106,6 +106,31 @@ do aplicativo/pacote é `devedu.deepin-configs`, também usado na entrada `.desk
 no controle de instância única e no diretório de estado. O instalador migra os
 backups da identidade anterior antes de remover os arquivos antigos da GUI.
 
+## Compatibilidade ABI do plugin da calculadora
+
+Revisão antes de ampliar plataformas (referência testada: Qt 6.8 do Deepin 25):
+
+- A superfície de API está restrita a contrato estável do Qt 6: `QGenericPlugin`,
+  `QCoreApplication::installEventFilter/sendEvent/applicationName` e `QKeyEvent`.
+  `nm -D` no `.so` não mostra símbolos privados; as dependências usam a tag
+  pública `@Qt_6` e sonames major (`libQt6Core.so.6`), sem fixação de versão
+  menor nas entradas ELF.
+- Os metadados do plugin gravam Qt 6.8 (`.note.qt.metadata`, bytes `01 06 08`)
+  e a referência `qt_version_tag@Qt_6.8`. O loader do Qt aceita plugins
+  construídos em versão menor igual ou anterior à do runtime, e os runtimes Qt 6
+  exportam as tags retroativas das versões menores anteriores. Portanto o plugin
+  carrega em qualquer Qt ≥ 6.8; a série 25 é rolling e só avança.
+- Recusa de carga (runtime anterior a 6.8 — fora do Deepin 25, ou runtime
+  Linglong da calculadora mais antigo que o usado pela GUI) degrada sem quebrar:
+  o Qt registra aviso e a calculadora abre com o teclado padrão. Limitação
+  conhecida: o status do painel reflete a flag por usuário, não a carga efetiva
+  do plugin, e não acusaria essa recusa.
+- O teste Qt do CTest (`calculator-qt`) exercita a carga e a filtragem no Qt 6.8.
+
+Conclusão: nenhuma garantia genérica é necessária agora, pois o alvo é Deepin 25.
+Reavaliar se a série mudar de major do Qt ou se o pacote passar a visar
+ambientes com Qt anterior a 6.8.
+
 ## Referências do SDK
 
 - [DTK Widgets oficial](https://github.com/linuxdeepin/dtkwidget)

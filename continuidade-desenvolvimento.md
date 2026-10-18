@@ -342,12 +342,17 @@ Testes unitários subiram de 114 para 116 (compatibilidade de gerações e
 resolução do helper). Testes interativos não reproduzíveis na VM: atalho de
 troca de monitor (`Shift+Win+←/→`) exige segundo monitor.
 
-Resta para concluir a fase 1: a decisão de commit/push e a execução do
-workflow no GitHub. O caminho do workflow (build sem reuso de imagem) passou
-também para o candidato final 1.1.0-3, com CTest 2/2, Lintian sem avisos e os
-cinco PASS da verificação limpa reexecutados; os bytes desse artefato
-(sha256 `35243d67…50334`) diferem do build com reuso porque a imagem
-reconstruída baixa pacotes atuais do crimson, e ambos passam. Um aviso do
-Lintian no changelog (`wrong-day-of-week`) foi corrigido: 18/10/2026 é
-domingo. O `--help` da GUI continua exigindo sessão gráfica, fora do escopo
-desta fase.
+Resta para concluir a fase 1: nada pendente de validação. A implementação
+inteira foi commitada e enviada (`0a2f879`), e o workflow do GitHub passou a
+executar build e verificação a cada push. Duas falhas do workflow na máquina
+limpa foram corrigidas no caminho: o `packaging/Dockerfile.deb` fonte estava
+engolido pela regra `*.deb` do `.gitignore` (`00c0ddb`) e um diretório `cmake/`
+vazio, que o git não versiona, constava da lista de cópia do `bin/build-deb`
+(`95858d6`). A execução verde cobre build em container, verificação em imagem
+limpa e o artefato `deepwin-deb-amd64` publicado no run. A revisão da ABI do
+plugin da calculadora foi registrada na [análise](analise-gui-deepin.md):
+superfície estável do Qt 6, metadados Qt 6.8, carrega em qualquer runtime
+≥ 6.8 e recusa se degrada sem quebrar; condição de reavaliação é mudança de
+major do Qt ou alvo com Qt anterior a 6.8. Um aviso do Lintian no changelog
+(`wrong-day-of-week`) foi corrigido: 18/10/2026 é domingo. O `--help` da GUI
+continua exigindo sessão gráfica, fora do escopo desta fase.
