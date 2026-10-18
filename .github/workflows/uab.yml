@@ -12,7 +12,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build UAB in the official Linyaps builder
-        run: ./bin/build-uab
+        shell: bash
+        run: |
+          set -o pipefail
+          ./bin/build-uab 2>&1 | tee build.log
+      - name: Report failure tail
+        if: failure()
+        run: |
+          tail -c 4000 build.log | while IFS= read -r line; do
+            echo "::error::${line:0:400}"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: deepwin-uab-amd64
