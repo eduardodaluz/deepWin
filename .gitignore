@@ -60,6 +60,7 @@ target_wrapper.*
 *.exe
 *.pdb
 *.deb
+!packaging/Dockerfile.deb
 *.ddeb
 *.rpm
 *.AppImage

@@ -1,0 +1,14 @@
+FROM linuxdeepin/deepin:beige-25@sha256:cd2314f4214935da3892f3adcb039b4f89a5510169d3208907e62792d7237414
+# Ferramentas de revisão vêm da base oficial. O índice crimson atualmente não
+# contém uma dependência Perl do Lintian; preparar as ferramentas antes do SDK.
+RUN rm -f /etc/apt/sources.list.d/*.list \
+    && printf 'deb https://community-packages.deepin.com/beige beige main commercial community\n' > /etc/apt/sources.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends dpkg-dev lintian \
+    && rm -rf /var/lib/apt/lists/*
+COPY debian/control /tmp/deepwin-build-deps/debian/control
+RUN printf 'deb https://community-packages.deepin.com/beige crimson main commercial community\n' > /etc/apt/sources.list \
+    && apt-get update \
+    && apt-get build-dep -y --no-install-recommends /tmp/deepwin-build-deps \
+    && rm -rf /var/lib/apt/lists/* /tmp/deepwin-build-deps
+WORKDIR /build
