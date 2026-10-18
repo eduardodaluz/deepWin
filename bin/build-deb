@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def copy_source(destination):
-    for name in ('bin', 'gui', 'tests', 'packaging', 'cmake', 'debian'):
+    for name in ('bin', 'gui', 'tests', 'packaging', 'debian'):
         shutil.copytree(ROOT / name, destination / name,
                         ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*.log'))
     for name in ('CMakeLists.txt', 'VERSION', 'LICENSE', 'resources.json', 'README.md', '.gitignore'):
