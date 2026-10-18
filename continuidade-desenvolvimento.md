@@ -441,3 +441,69 @@ fase 1. Pendências da L2: instalar e exercitar o `.uab` em VM Deepin 25
 limpa (incluindo a prova fina de X11 do helper de colagem e a persistência
 de estado após reinício do container) e a decisão do mantenedor sobre publicar
 o workflow Linyaps na CI. Commit local sem push.
+
+## Aceite L2 na VM — 18/10/2026 (mesma data, resultados)
+
+A VM de aceite (Deepin 25.2.0, Linyaps **1.13.7** — mais antiga que a 1.14.3
+de desenvolvimento, o que valida a faixa inferior) recebeu o `.uab` com o
+`.deb` 1.1.0-3 ainda instalado e recursos ativos da fase 1.
+
+Instalação e descoberta de distribuição:
+
+- `ll-cli install ./arquivo.uab` **não puxa Base/Runtime do repositório**:
+  o instalador procura os refspecs em `local:` e falha
+  (`Refspec 'local:main/org.deepin.runtime.dtk/6.7.0.50/...' not found`) se o
+  runtime não estiver no OSTree local. O runtime pôde ser instalado antes por
+  ref (`sudo ll-cli install org.deepin.runtime.dtk/6.7.0.50`, do mirror
+  estável), mas a decisão tomada foi **mudar o pin para
+  `org.deepin.runtime.dtk/25.2.2`**: uma instalação stock do Deepin 25 já
+  carrega a série 25.2.2 (a calculadora da VM roda nela), o develop existe no
+  repo estável e o `.uab` passa a instalar sem passo extra. O usuário precisa
+  de `sudo` para instalar UAB ("Error 9: not authorized" sem ele).
+- A calculadora da VM usa `base/25.2.2` + `runtime.dtk/25.2.2`, igual ao novo
+  pin — o plugin da calculadora compila contra o Qt da mesma série em que a
+  calculadora executa.
+
+Resultados dentro do sandbox (backend via `ll-cli run`, ambiente de sessão
+exportado no SSH):
+
+| Verificação | Resultado |
+| --- | --- |
+| `deepwin --version` e importação `dbus`/`gi` (pydeps) dentro do sandbox | PASS nos dois builds (6.7.0 e 25.2.2) |
+| Status completo pelo sandbox | **10/10 recursos disponíveis** após o fix de `XDG_DATA_DIRS`; `restore_count: 9` — os backups do `.deb` compartilhados |
+| Prévia da dock pelo sandbox | disponível e refletindo a ativação do `.deb`, com QML lido de `/run/host/rootfs` |
+| Escrita: `set clipboard on` pelo sandbox | systemd do **host** aplicou (serviço `active` + `enabled`, unidade no home real apontando ao runtime persistente) |
+| Unidade externa modificada (stub `ExecStart=/bin/true` com hash divergente do marcador) | recusada com "A unidade contém personalizações" — proteção de ownership funcionando através do sandbox |
+
+Falhas encontradas e corrigidas no caminho:
+
+1. **Catálogos do host invisíveis no rootfs do app** (calculadora, captura e
+   wallpaper indisponíveis no primeiro status): schemas do dsettings em
+   `/usr/share` do host e o launcher da calculadora em
+   `/var/lib/linglong/entries/apps/share` do host (o catálogo de desktops do
+   Linyaps 1.13.x fica sob o segmento `apps`; o menu do DeepWin já nasce
+   registrado nele). Correção única no bootstrap: quando
+   `/run/host/rootfs` existe, prefixar `usr/share` e
+   `var/lib/linglong/entries/share` do hospedeiro em `XDG_DATA_DIRS` do
+   processo (backend e helper de colagem; no `.deb` é no-op porque o caminho
+   não existe).
+2. **CI do Linyaps falhou no runner do GitHub** (Debian passou no mesmo
+   push): os logs exigem autenticação e as anotações só diziam "exit code
+   1". O workflow agora tecla o build em `build.log`, emite a cauda como
+   `::error::` (vira anotação legível pela API) e usa `pipefail` para o
+   `tee` não mascarar o resultado.
+
+Provas ainda pendentes da L2: provas visuais humanas (prévias da dock,
+vírgula na calculadora, atalhos) com o grab `Ctrl+Alt+G`, persistência de
+estado após reinício do container, e remoção do app Linyaps preservando
+serviços e helpers. Testes unitários: 126.
+
+Remoção do container validada por SSH na sequência: `ll-cli uninstall`
+remove o app, o serviço de colagem **segue ativo e habilitado** (executa do
+runtime persistente no home), os helpers e o `deepwin-restore` continuam
+funcionais sem o aplicativo, e a reinstalação seguinte é limpa. A
+persistência "após reinício do container" é inerente ao modelo — cada
+`ll-cli run` é um container novo, e os mesmos estados foram lidos
+consistentemente entre execuções. Reboot completo da VM ficou para a rodada
+manual do mantenedor (sem certeza de autologin, o reboot derrubaria a sessão
+que os testes usam).

@@ -46,6 +46,7 @@ class BootstrapTests(unittest.TestCase):
             with patch.object(backend, 'HOST_ROOT', str(host)):
                 backend.bootstrap_runtime_python(root=str(self.home / 'absente'))
             expected = ':'.join([str(host / 'usr/share'),
+                                 str(host / 'var/lib/linglong/entries/apps/share'),
                                  str(host / 'var/lib/linglong/entries/share'),
                                  before or '/usr/local/share:/usr/share'])
             self.assertEqual(os.environ.get('XDG_DATA_DIRS'), expected)

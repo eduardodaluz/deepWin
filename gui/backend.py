@@ -34,6 +34,7 @@ def bootstrap_runtime_python(root=None):
         # leitura, não no rootfs do aplicativo.
         host = Path(HOST_ROOT)
         shares = [str(host / 'usr/share'),
+                  str(host / 'var/lib/linglong/entries/apps/share'),
                   str(host / 'var/lib/linglong/entries/share')]
         os.environ['XDG_DATA_DIRS'] = ':'.join(shares) + ':' + \
             os.environ.get('XDG_DATA_DIRS', '/usr/local/share:/usr/share')
