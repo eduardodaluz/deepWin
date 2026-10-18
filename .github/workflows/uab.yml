@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       # Espelho do builder oficial; a variável permite trocar a origem.
       DEEPWIN_BUILDER_IMAGE: ${{ vars.DEEPWIN_BUILDER_IMAGE || 'ghcr.io/eduardodaluz/linyaps-builder@sha256:9170f635112d5068ef815d6e55d6bd3969e668151bd31a33ca48086f53fd372a' }}
@@ -33,6 +33,14 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          # O builder cria user namespaces como usuário não root dentro do
+          # Docker. Ajustar só a VM descartável da CI e restaurar ao sair.
+          namespace_setting=kernel.apparmor_restrict_unprivileged_userns
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            namespace_original="$(sysctl -n "$namespace_setting")"
+            trap 'sudo sysctl -w "$namespace_setting=$namespace_original"' EXIT
+            sudo sysctl -w "$namespace_setting=0"
+          fi
           ./bin/build-uab 2>&1 | tee build.log
       - name: Report failure tail
         if: failure()
