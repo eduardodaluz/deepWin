@@ -1,0 +1,9 @@
+# Gerenciado pelo DeepWin
+[Unit]
+Description=Baixar uma paisagem e aplicar no Deepin
+After=dde-session-initialized.target
+
+[Service]
+Type=oneshot
+ExecStart=@WALLPAPER_EXEC@
+TimeoutStartSec=15min

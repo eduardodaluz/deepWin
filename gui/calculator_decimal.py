@@ -45,15 +45,16 @@ def refresh_applications():
 
 
 class CalculatorDecimal:
-    def __init__(self, home=None, data_home=None, sources=None, refresh=None):
+    def __init__(self, home=None, data_home=None, sources=None, refresh=None, bundle=None):
         home = Path(home or Path.home())
         self.data_home = Path(data_home or os.environ.get('XDG_DATA_HOME', home / '.local/share'))
         self.resource = self.data_home / APP_ID
         self.refresh = refresh or refresh_applications
         self.desktop = self.data_home / 'applications' / DESKTOP
         self.flag = self.resource / 'calculator-enabled.json'
-        self.launcher = self.resource / 'bin/deepwin-calculator'
-        self.plugin = self.resource / 'qt6/plugins/generic/libdeepwin-calculator.so'
+        self.bundle = Path(bundle or self.resource)
+        self.launcher = self.bundle / 'bin/deepwin-calculator'
+        self.plugin = self.bundle / 'qt6/plugins/generic/libdeepwin-calculator.so'
         data_dirs = os.environ.get('XDG_DATA_DIRS', '/usr/local/share:/usr/share').split(':')
         self.sources = [Path(p) for p in sources] if sources is not None else [
             Path('/var/lib/linglong/entries/share/applications') / DESKTOP,
@@ -101,7 +102,7 @@ class CalculatorDecimal:
         if enabled:
             self.status()
             text = self.source()
-            text = re.sub(r'^Exec=.+$', lambda _match: 'Exec=' + desktop_quote(self.launcher), text, count=1, flags=re.M)
+            text = re.sub(r'^Exec=.+$', lambda _match: 'Exec=' + desktop_quote(self.launcher) + ' --deepwin-flag ' + desktop_quote(self.flag), text, count=1, flags=re.M)
             text = re.sub(r'^DBusActivatable=.+$', 'DBusActivatable=false', text, flags=re.M)
             text += '\n# Launcher decimal gerenciado pelo DeepWin\n'
             data = text.encode()

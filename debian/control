@@ -1,0 +1,23 @@
+Source: devedu.deepin-configs
+Section: utils
+Priority: optional
+Maintainer: eduardodaluz <eduardo.r.luz@gmail.com>
+Build-Depends: debhelper-compat (= 13), cmake (>= 3.20), g++, pkg-config,
+ libdtk6widget-dev, qt6-base-dev, qt6-base-dev-tools,
+ python3, python3-dbus, python3-gi, nodejs, git
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+Homepage: https://github.com/eduardodaluz/deepWin
+Vcs-Git: https://github.com/eduardodaluz/deepWin.git
+Vcs-Browser: https://github.com/eduardodaluz/deepWin
+
+Package: devedu.deepin-configs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, python3, python3-dbus, python3-gi,
+ gir1.2-glib-2.0, libx11-6, libxfixes3, xdotool, systemd,
+ libglib2.0-bin, curl, file, xdg-user-dirs, qt6-qpa-plugins
+Suggests: nodejs, npm
+Description: Native Deepin desktop configuration panel
+ DeepWin provides a DTK interface for clipboard paste, desktop shortcuts,
+ window previews, calculator decimal input and optional Claude/Z.AI tools.
+ Adjustments and restoration backups are maintained for each user.

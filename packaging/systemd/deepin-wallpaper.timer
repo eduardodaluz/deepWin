@@ -1,0 +1,11 @@
+# Gerenciado pelo DeepWin
+[Unit]
+Description=Atualizar paisagem do Deepin a cada hora
+
+[Timer]
+OnActiveSec=1h
+OnUnitActiveSec=1h
+Unit=deepin-wallpaper.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=DeepWin
+Comment=Configure Deepin desktop features
+Comment[pt_BR]=Configure os recursos do desktop Deepin
+Exec=deepwin
+Icon=preferences-system
+Terminal=false
+Categories=Settings;DesktopSettings;
+StartupNotify=true
+StartupWMClass=deepwin

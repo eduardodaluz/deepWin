@@ -1,0 +1,19 @@
+# Gerenciado pelo DeepWin
+[Unit]
+Description=Colar com Enter no histórico do Deepin
+After=dde-session-initialized.target
+PartOf=dde-session-initialized.target
+StartLimitIntervalSec=30
+StartLimitBurst=3
+
+[Service]
+Type=simple
+ExecCondition=/bin/sh -c 'test "$XDG_SESSION_TYPE" = x11 && test -n "$DISPLAY"'
+ExecStart=@CLIPBOARD_EXEC@
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=dde-session-initialized.target

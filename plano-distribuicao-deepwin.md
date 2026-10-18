@@ -1,8 +1,20 @@
 # Plano de distribuição do DeepWin
 
-Status: planejamento inicial. Prioridade de implementação: fase 1, pacote `.deb`.
-Este documento define entregas futuras; os instaladores e pipelines descritos
-abaixo ainda não existem. A instalação disponível continua sendo `deepwin.yml`.
+Status em 18/10/2026: fase 1 validada também em VM Deepin 25.2.0 com sessão
+gráfica completa e Solid ativo (D6) — 116 testes Python, CTest 2/2, Lintian sem
+avisos, fluxo `bin/verify-deb` aprovado, ativação dos 10 recursos na sessão
+real, atualização com ajustes ativos preservando o estado byte a byte, conflito
+de unidade customizada recusado, remoção com restauração funcional pelo runtime
+e reinstalação normais, e interação humana confirmada (prévias da dock, vírgula
+na calculadora, Win+Shift+S, Win+V + Enter, workspaces). O aceite encontrou e
+corrigiu três falhas — duas gerações do serviço de atalhos, falso
+"personalizado" na prévia da dock e corrida assíncrona do daemon antigo;
+detalhes no adendo de 18/10 da [passagem](continuidade-desenvolvimento.md).
+Candidato: `devedu.deepin-configs_1.1.0-3_amd64.deb`. Pendem a decisão de
+commit/push e a execução do workflow no GitHub. Fases 2 e 3 permanecem futuras.
+O diagnóstico e os checklists abaixo registram o plano original; consulte a
+[passagem de desenvolvimento](continuidade-desenvolvimento.md) para o estado
+efetivo, os testes realizados e as pendências antes de marcar entregas concluídas.
 
 ## Objetivo e sequência
 
@@ -267,14 +279,18 @@ ajustes funcionais mesmo que o diretório portátil seja movido ou removido.
 
 ## Decisões pendentes e próxima entrega
 
-Antes da primeira publicação binária, definir com o mantenedor a licença do
-projeto e os metadados públicos de manutenção. O repositório ainda não fornece
-`LICENSE`; o planejamento não escolhe uma licença em nome do autor.
+O mantenedor escolheu MIT e autorizou `eduardo.r.luz@gmail.com` como e-mail
+público do pacote. `LICENSE` e os metadados correspondentes já foram preparados
+na implementação local, ainda sem commit na data desta passagem.
 
 Também permanecem para validação: versões mínimas exatas, ambiente de CI Deepin,
 versão de Base/Runtime Linyaps e composição final das bibliotecas portáteis.
 Essas definições não impedem iniciar D1, mas fazem parte do aceite das releases.
 
-A próxima entrega de implementação é D1: build comum, instalação em staging e
-resolução de caminhos. Depois vêm migração/ativação de integrações e o primeiro
-`.deb` de teste. A fase 2 só avança após o aceite da fase 1; a fase 3 segue a fase 2.
+A implementação local já inclui build comum, staging, resolução de caminhos,
+migração/ativação de integrações e um `.deb` validado em imagem limpa e em VM
+com sessão gráfica completa. A próxima entrega é o commit/push do candidato
+1.1.0-3 e a execução do workflow no GitHub. A revisão da ABI do plugin da
+calculadora permanece como condição para ampliar plataformas (referência
+testada: Qt 6.8 do Deepin 25). A fase 2 só avança após o aceite da fase 1;
+a fase 3 segue a fase 2.

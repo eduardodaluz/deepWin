@@ -1,0 +1,8 @@
+FROM linuxdeepin/deepin:beige-25@sha256:cd2314f4214935da3892f3adcb039b4f89a5510169d3208907e62792d7237414
+COPY package.deb /tmp/deepwin-package.deb
+COPY verify-installed.sh /tmp/verify-installed.sh
+RUN rm -f /etc/apt/sources.list.d/*.list \
+    && printf 'deb https://community-packages.deepin.com/beige crimson main commercial community\n' > /etc/apt/sources.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends /tmp/deepwin-package.deb dbus-daemon \
+    && /bin/sh /tmp/verify-installed.sh

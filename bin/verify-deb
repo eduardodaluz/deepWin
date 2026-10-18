@@ -1,0 +1,34 @@
+#!/usr/bin/python3
+"""Valida instalação, abertura e remoção do .deb em uma imagem Deepin limpa."""
+import argparse
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('package', nargs='?', type=Path)
+    args = parser.parse_args()
+    packages = [args.package] if args.package else sorted((ROOT/'dist').glob('devedu.deepin-configs_*.deb'))
+    if len(packages) != 1:
+        parser.error('Informe o .deb principal que deseja validar.')
+    package = packages[0].resolve()
+    contents = subprocess.check_output(['dpkg-deb', '--contents', str(package)], text=True)
+    for unexpected in ('/home/', '/.build/', '/.config/', '/sdk/'):
+        if unexpected in contents:
+            raise SystemExit('Conteúdo inesperado no pacote: ' + unexpected)
+    with tempfile.TemporaryDirectory(prefix='deepwin-verify-') as temporary:
+        context = Path(temporary)
+        shutil.copyfile(package, context/'package.deb')
+        shutil.copyfile(ROOT/'packaging/verify-installed.sh', context/'verify-installed.sh')
+        shutil.copyfile(ROOT/'packaging/Dockerfile.test-deb', context/'Dockerfile')
+        subprocess.run(['docker','build','--progress=plain','-t','deepwin-deb-verified:local',str(context)],check=True)
+    print('PASS pacote validado em instalação limpa:', package.name)
+
+
+if __name__ == '__main__':
+    main()

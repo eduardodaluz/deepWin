@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+# A partir do próprio executável, funciona também dentro de DESTDIR/staging.
+prefix=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+resource="$prefix/@DEEPWIN_RESOURCE_DIR@"
+# Migrar a identidade anterior ao abrir normalmente. Consultas de versão,
+# ajuda e testes de abertura permanecem sem migração de estado.
+migrate=yes
+for argument in "$@"; do
+    case "$argument" in --smoke-test|--help|-h|--version|-v) migrate=no ;; esac
+done
+if [ "$migrate" = yes ]; then
+    if ! migration=$(/usr/bin/python3 "$resource/gui/backend.py" migrate-state); then
+        printf '%s\n' "$migration" >&2
+        exit 1
+    fi
+fi
+exec "$resource/deepwin-ui" --backend "$resource/gui/backend.py" "$@"

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>devedu.deepin-configs</id>
+  <name>DeepWin</name>
+  <summary>Configure Deepin desktop features</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <description><p>Manage clipboard paste, window previews, calculator decimal input, shortcuts and optional tools in a native Deepin interface.</p></description>
+  <launchable type="desktop-id">devedu.deepin-configs.desktop</launchable>
+  <url type="homepage">https://github.com/eduardodaluz/deepWin</url>
+  <url type="bugtracker">https://github.com/eduardodaluz/deepWin/issues</url>
+  <provides><binary>deepwin</binary></provides>
+</component>

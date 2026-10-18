@@ -1,0 +1,23 @@
+{
+  "format": 1,
+  "files": [
+    "VERSION",
+    "LICENSE",
+    "resources.json",
+    "gui/backend.py",
+    "gui/claude_versions.py",
+    "gui/dock_preview.py",
+    "gui/calculator_decimal.py",
+    "gui/resources.py",
+    "gui/user_services.py",
+    "bin/zclaude",
+    "bin/deepwin-calculator",
+    "bin/deepin-clipboard-autopaste",
+    "bin/refresh-deepin-wallpaper",
+    "bin/deepwin-restore",
+    "systemd/deepin-clipboard-autopaste.service",
+    "systemd/deepin-wallpaper.service",
+    "systemd/deepin-wallpaper.timer",
+    "qt6/plugins/generic/libdeepwin-calculator.so"
+  ]
+}

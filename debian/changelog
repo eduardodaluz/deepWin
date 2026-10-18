@@ -1,0 +1,25 @@
+devedu.deepin-configs (1.1.0-3) unstable; urgency=medium
+
+  * Wait for the legacy keybinding daemon to apply screenshot changes before
+    confirming, avoiding an intermittent false failure.
+  * Resolve the persistent runtime helper when building a new controller, so
+    status queries no longer report the dock drop-in as customized.
+
+ -- eduardodaluz <eduardo.r.luz@gmail.com>  Sun, 18 Oct 2026 10:05:00 -0300
+
+devedu.deepin-configs (1.1.0-2) unstable; urgency=medium
+
+  * Support both keybinding service generations for the screenshot shortcut:
+    dde-shell with the long identifier and dde-session-daemon with the short
+    identifier, typed GetShortcut and JSON replies.
+  * Restore no longer overwrites a customized user unit when the panel
+    record was removed.
+
+ -- eduardodaluz <eduardo.r.luz@gmail.com>  Sun, 18 Oct 2026 09:20:00 -0300
+
+devedu.deepin-configs (1.1.0-1) unstable; urgency=medium
+
+  * First Debian package for Deepin 25.
+  * Include native DTK interface, calculator plugin and integration resources.
+
+ -- eduardodaluz <eduardo.r.luz@gmail.com>  Sat, 17 Oct 2026 20:00:00 -0300

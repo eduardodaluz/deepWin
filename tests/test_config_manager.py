@@ -60,6 +60,10 @@ class ManagerTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.home = Path(self.temp.name)
+        environment = patch.dict(os.environ, {'XDG_DATA_HOME': str(self.home/'.local/share'),
+                                             'XDG_CONFIG_HOME': str(self.home/'.config')})
+        environment.start()
+        self.addCleanup(environment.stop)
         self.state = self.home / 'state'
         self.source = self.home / 'resource-zclaude'
         self.source.write_text('#!/bin/bash\nexec claude "$@"\n')

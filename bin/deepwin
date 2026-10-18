@@ -5,5 +5,8 @@ project_dir=$(dirname -- "$script_dir")
 if [[ -x "$project_dir/.build/deepwin/deepwin-ui" && -f "$project_dir/gui/backend.py" ]]; then
   exec "$project_dir/.build/deepwin/deepwin-ui" --backend "$project_dir/gui/backend.py" "$@"
 fi
+if [[ -x /usr/bin/deepwin && $script_dir != /usr/bin && -d /usr/lib/deepwin ]]; then
+  exec /usr/bin/deepwin "$@"
+fi
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/devedu.deepin-configs"
 exec "$data_dir/deepwin-ui" --backend "$data_dir/gui/backend.py" "$@"

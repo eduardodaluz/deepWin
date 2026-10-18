@@ -1,0 +1,26 @@
+name: Debian package
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test in Deepin 25
+        run: ./bin/build-deb --container
+      - name: Verify installation in clean Deepin image
+        run: ./bin/verify-deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deepwin-deb-amd64
+          path: |
+            dist/*.deb
+            dist/*.sha256
+            dist/*.buildinfo
+            dist/*.changes
+            dist/*lintian.txt

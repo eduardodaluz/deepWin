@@ -1,0 +1,42 @@
+.TH DEEPWIN 1 "October 2026" "DeepWin" "User Commands"
+.SH NAME
+deepwin \- configure Deepin desktop features
+.SH SYNOPSIS
+.B deepwin
+.RI [ options ]
+.SH DESCRIPTION
+DeepWin is a native DTK panel for clipboard paste, desktop shortcuts,
+window previews, calculator decimal input and optional Claude/Z.AI tools.
+Features are enabled by the user; installation does not activate them.
+.SH OPTIONS
+.TP
+.B \-\-help
+Show available options.
+.TP
+.B \-\-version
+Show the program version.
+.TP
+.B \-\-smoke\-test
+Query states, check that the window opens, and exit without changing settings.
+Unavailable optional features are accepted.
+.TP
+.B \-\-check\-integrations
+Require all integrations to be available during a smoke test.
+.TP
+.BI \-\-section " section"
+Open overview, productivity, appearance or tools.
+.SH FILES
+.I ~/.local/state/devedu.deepin-configs/
+contains restoration backups. User XDG directory overrides are supported.
+The persistent integration runtime is kept under
+.I ~/.local/share/devedu.deepin-configs/runtime/.
+.SH RESTORATION
+Use the restore button before removing the GUI, or run
+.I ~/.local/share/devedu.deepin-configs/runtime/current/bin/deepwin-restore
+from the user's graphical session after removing it.
+.SH AUTHOR
+eduardodaluz.
+.SH REPORTING BUGS
+https://github.com/eduardodaluz/deepWin/issues
+.SH LICENSE
+MIT. Dependencies retain their own licenses.

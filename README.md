@@ -19,7 +19,50 @@ Ele permite habilitar e desabilitar dez recursos:
 - Download automático de paisagens.
 - Disponibilidade do comando `zclaude`.
 
-### Requisitos e instalação
+### Instalação pelo pacote Debian
+
+O pacote de teste da fase 1 tem como alvo **Deepin 25 amd64**. Há um pacote
+gerado localmente, já validado em imagem limpa: instalação, abertura,
+reinstalação, remoção e o comando de restauração independente. O workflow
+de Actions foi preparado no código e ainda precisa ser enviado e validado antes
+de disponibilizar artefatos para download; o aceite final em VM com sessão
+gráfica completa também está pendente. O estado do trabalho está na
+[passagem de desenvolvimento](continuidade-desenvolvimento.md).
+O pacote inclui a GUI DTK,
+o plugin da calculadora e os recursos de integração; não requer Ansible,
+compilador ou SDK na máquina que vai executar o aplicativo.
+
+Instale o arquivo pelo instalador gráfico do Deepin ou, na pasta do download:
+
+```bash
+sudo apt install ./devedu.deepin-configs_1.1.0-1_amd64.deb
+deepwin
+```
+
+A instalação não ativa ajustes nem baixa o Claude. Ative os recursos desejados
+no painel. Para remover o pacote, use `sudo apt remove devedu.deepin-configs`.
+Os dados e ajustes já ativados são preservados. Para desfazê-los, use **Restaurar
+alterações** antes de remover a GUI, ou o comando de restauração persistente
+explicado abaixo. Em uma máquina com instalação local antiga, use
+`/usr/bin/deepwin` para garantir que está abrindo o pacote.
+
+Para gerar o pacote a partir do repositório, com Docker disponível:
+
+```bash
+./bin/build-deb --container
+```
+
+O build usa uma imagem oficial do Deepin 25, com digest fixado, e instala as
+ferramentas somente no container. Executa CMake, a suíte de testes, debhelper e
+Lintian. Os pacotes, relatórios e checksums ficam em `dist/`.
+`./bin/verify-deb` valida instalação, abertura, reinstalação
+e remoção em uma imagem limpa, sem montar a pasta pessoal do usuário; o fluxo
+completo já passa. Para build nativo,
+instale as dependências de `debian/control` e execute `./bin/build-deb`.
+A validação em container não substitui o aceite final em uma VM com desktop
+Deepin completo; este pacote deve ser tratado inicialmente como versão de teste.
+
+### Instalação pelo código-fonte
 
 A interface requer uma sessão gráfica do Deepin, os runtimes DTK 6 Widgets e
 Qt 6 Widgets, Python 3 com `python3-dbus` e `python3-gi`, além de Ansible.
@@ -61,17 +104,18 @@ O download de paisagens é independente da rotação nativa de imagens do Deepin
 Se a rotação nativa estiver ativa, a tela informa essa condição. Desativar o
 download mantém a imagem atual; o painel não altera a rotação nativa.
 
-A instalação da GUI não instala nem habilita todos os recursos. O painel
-consulta o estado da sessão e indica recursos ausentes ou bloqueados como
-indisponíveis. Para preparar cada integração:
+A instalação não habilita os recursos. O painel prepara as integrações
+compatíveis na primeira ativação e informa quando falta uma dependência da
+sessão. Unidades e arquivos personalizados existentes são preservados:
+
 
 | Recurso | Preparação |
 | --- | --- |
-| Colagem automática | Aplicar `deepin-clipboard.yml`; por padrão, inicia em simulação, sem colar. |
+| Colagem automática | O painel prepara o serviço por usuário em sessão X11; a nova unidade executa colagem real. O playbook continua disponível para diagnóstico em simulação. |
 | Atalhos | Usar uma sessão com KGlobalAccel e as APIs de atalhos do Deepin; `deepin-shortcuts.yml` aplica as combinações sugeridas. |
 | Vírgula decimal | Calculadora Deepin com Qt 6 (Linglong ou launcher nativo compatível); instalado com a GUI, controle em Produtividade. |
 | Miniaturas ao clicar | Requer o dock do `dde-shell` com QML compatível. O controle fica em Aparência e é instalado com a GUI. |
-| Download agendado de paisagens | Requer `deepin-wallpaper.timer` e seu serviço no systemd do usuário. O repositório ainda não fornece a instalação dessas unidades; `deepin-wallpaper.yml` apenas troca a imagem uma vez. |
+| Download agendado de paisagens | O painel prepara serviço e timer de uma hora por usuário. Timers existentes são preservados; `deepin-wallpaper.yml` continua fazendo uma troca única. |
 | `zclaude` | Instalar o Claude Code e configurar a chave da Z.AI para usar o wrapper; `zclaude.yml` instala o comando. |
 
 O painel identifica quando a colagem está em modo de simulação. Habilitar esse
@@ -98,10 +142,11 @@ PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -m unittest discover -s tests -v
 ./bin/deepwin --smoke-test
 ```
 
-Os testes usam simulações; quando o SDK em cache e o plugin compilado estão
-disponíveis, também executam o filtro Qt real em modo offscreen. O `--smoke-test` exige a interface
-compilada, uma sessão gráfica e as dez integrações disponíveis; um recurso
-ausente faz essa verificação falhar, mesmo que a janela abra normalmente.
+Os testes usam simulações e também executam o filtro Qt real quando o SDK/plugin
+estão disponíveis. O build CMake inclui um teste próprio do plugin em offscreen.
+O `--smoke-test` verifica a abertura e consulta de estados, aceitando recursos
+opcionais indisponíveis. Use `--smoke-test --check-integrations` para exigir que
+as dez integrações estejam disponíveis na sessão de teste.
 
 Com a sessão desbloqueada, a GUI fechada, sem alterações pendentes no painel
 e com a colagem ativa, é possível testar o switch e o diálogo DTK de restauração:
@@ -128,8 +173,28 @@ ou altera uma configuração.
 O [plano de distribuição](plano-distribuicao-deepwin.md) organiza as próximas
 entregas em três fases: **1. `.deb`**, **2. Linyaps/Linglong (`.uab`)** e
 **3. portátil (`.tar.xz`)**. O alvo inicial é Deepin 25 em amd64, com os mesmos
-ajustes e backups por usuário. Os instaladores ainda estão planejados;
-a instalação disponível continua sendo o playbook descrito acima.
+ajustes e backups por usuário. A fase 1 já tem build e pacote de teste;
+as fases Linyaps e portátil continuam planejadas.
+
+### Runtime persistente e restauração
+
+Ao ativar uma integração que precisa de arquivos do programa, o painel prepara
+um runtime em `$XDG_DATA_HOME/devedu.deepin-configs/runtime/`. As gerações são
+validadas por manifesto/hashes, e o ponteiro `current` é atualizado atomicamente.
+Arquivos editados manualmente não são sobrescritos. Serviços e wrappers novos
+usam esse caminho estável para continuarem funcionando após remover a GUI.
+
+A restauração sem GUI fica disponível pelo próprio runtime:
+
+```bash
+"${XDG_DATA_HOME:-$HOME/.local/share}/devedu.deepin-configs/runtime/current/bin/deepwin-restore"
+```
+
+É possível acrescentar um identificador, como `clipboard`, para restaurar apenas
+um recurso. A restauração exige a sessão do usuário e as dependências de execução;
+ela preserva backups de recursos que não conseguir restaurar. Unidades criadas
+pela primeira ativação são removidas quando o estado original era ausente.
+Instalações anteriores permanecem compatíveis com seus helpers locais.
 
 ### Atualização do nome anterior
 
@@ -456,3 +521,8 @@ chave da Z.AI.
 
 O guia [de diagnóstico do erro 1210](fix-glm-claudecode-erro1210.md) descreve um
 contorno específico; instalar uma versão antiga não é requisito geral do projeto.
+
+## Licença
+
+O código do DeepWin é distribuído sob a [licença MIT](LICENSE). As dependências
+e os arquivos nativos do Deepin mantêm suas próprias licenças.

@@ -14,13 +14,28 @@ packages = build / 'packages'
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--fetch-sdk', action='store_true', help='baixar headers oficiais sem instalar pacotes')
 args = parser.parse_args()
+# O build oficial usa CMake. O modo de headers em cache é mantido para máquinas
+# de desenvolvimento sem SDK instalado no sistema.
+if not args.fetch_sdk and shutil.which('cmake') and subprocess.run(
+        ['pkg-config', '--exists', 'dtk6widget'], check=False).returncode == 0:
+    cmake_build = build / 'cmake'
+    subprocess.run(['cmake', '-S', str(root), '-B', str(cmake_build),
+                    '-DBUILD_TESTING=OFF', '-DCMAKE_BUILD_TYPE=Release',
+                    '-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=' + str(build)], check=True)
+    subprocess.run(['cmake', '--build', str(cmake_build), '--parallel', '2'], check=True)
+    destination = build / 'qt6/plugins/generic'
+    destination.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(cmake_build / 'qt6/plugins/generic/libdeepwin-calculator.so',
+                    destination / 'libdeepwin-calculator.so')
+    print('DeepWin compilado com CMake:', build / 'deepwin-ui')
+    sys.exit(0)
 build.mkdir(parents=True, exist_ok=True)
 target = build / 'deepwin-ui'
 plugin = build / 'qt6/plugins/generic/libdeepwin-calculator.so'
 calculator_sources = [root / 'gui/calculator_decimal.cpp', root / 'gui/calculator_decimal.json']
 if (not args.fetch_sdk and target.exists() and plugin.exists() and
         min(target.stat().st_mtime, plugin.stat().st_mtime) >= max(
-        (root / 'gui/main.cpp').stat().st_mtime, Path(__file__).stat().st_mtime,
+        (root / 'gui/main.cpp').stat().st_mtime, (root / 'VERSION').stat().st_mtime, Path(__file__).stat().st_mtime,
         *[path.stat().st_mtime for path in calculator_sources])):
     print('DeepWin já compilado:', target)
     sys.exit(0)
@@ -66,7 +81,7 @@ else:
         parser.error('SDK não encontrado. Execute novamente com --fetch-sdk.')
 
 subprocess.run(['g++', '-std=c++17', '-O2', '-fPIC', '-Wall', '-Wextra',
-                *flags, str(root / 'gui/main.cpp'), '-o', str(target), *libraries], check=True)
+                *flags, '-DDEEPWIN_VERSION="' + (root / 'VERSION').read_text().strip() + '"', str(root / 'gui/main.cpp'), '-o', str(target), *libraries], check=True)
 moc = next((str(path) for path in (sdk / 'usr/lib/qt6/libexec/moc',
     Path('/usr/lib/qt6/libexec/moc')) if path.is_file()), shutil.which('moc6'))
 if not moc:

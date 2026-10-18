@@ -127,6 +127,28 @@
             dest: "{{ deepwin_data }}/bin/deepwin-calculator"
             mode: '0755'
 
+        - name: Instalar os recursos de distribuição e restauração
+          ansible.builtin.copy:
+            src: "{{ item.src }}"
+            dest: "{{ deepwin_data }}/{{ item.dest }}"
+            mode: "{{ item.mode }}"
+          loop:
+            - {src: VERSION, dest: VERSION, mode: '0644'}
+            - {src: LICENSE, dest: LICENSE, mode: '0644'}
+            - {src: resources.json, dest: resources.json, mode: '0644'}
+            - {src: gui/resources.py, dest: gui/resources.py, mode: '0644'}
+            - {src: gui/user_services.py, dest: gui/user_services.py, mode: '0644'}
+            - {src: bin/deepin-clipboard-autopaste, dest: bin/deepin-clipboard-autopaste, mode: '0755'}
+            - {src: bin/refresh-deepin-wallpaper, dest: bin/refresh-deepin-wallpaper, mode: '0755'}
+            - {src: bin/deepwin-restore, dest: bin/deepwin-restore, mode: '0755'}
+
+        - name: Instalar templates de serviços sem ativar recursos
+          ansible.builtin.copy:
+            src: packaging/systemd/
+            dest: "{{ deepwin_data }}/systemd/"
+            mode: '0644'
+            directory_mode: '0755'
+
         - name: Atualizar o wrapper existente para integrar o seletor
           ansible.builtin.stat:
             path: "{{ deepwin_home }}/.local/bin/zclaude"

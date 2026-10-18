@@ -10,18 +10,26 @@ import json
 import os
 from pathlib import Path
 import stat
+import shutil
 import subprocess
+import time
 import sys
 import tempfile
 
 
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from claude_versions import ClaudeVersions
 from dock_preview import DockPreview
 from calculator_decimal import CalculatorDecimal
+from resources import Resources
+from user_services import UserServices
 
 
 SCREENSHOT_ID = 'org.deepin.dde.keybinding.shortcut.app.screenshot'
+# Instalações anteriores ao dde-shell com plugin de atalhos usam o
+# dde-session-daemon, com identificador curto e resposta em JSON.
+SCREENSHOT_LEGACY_ID = 'screenshot'
 APP_ID = 'devedu.deepin-configs'
 SCREENSHOT_KEY = '<Shift><Super>S'
 SHORTCUTS = {
@@ -57,6 +65,10 @@ class ConfigError(RuntimeError):
     pass
 
 
+class ServiceMissing(ConfigError):
+    pass
+
+
 def migrate_legacy_state(state_home=None):
     state_home = Path(state_home or os.environ.get(
         'XDG_STATE_HOME', str(Path.home() / '.local/state')))
@@ -74,7 +86,19 @@ def migrate_legacy_state(state_home=None):
 
 
 def screenshot_keys(api):
-    info = api.GetShortcut(SCREENSHOT_ID, timeout=3)
+    try:
+        info = api.GetShortcut(SCREENSHOT_ID, timeout=3)
+    except TypeError:
+        # dbus-python recusa a chamada nova quando a assinatura é da
+        # geração antiga do serviço (identificador curto + tipo + JSON).
+        raw = str(api.GetShortcut(SCREENSHOT_LEGACY_ID, 0, timeout=3) or '').strip()
+        try:
+            info = json.loads(raw) if raw else {}
+        except ValueError as error:
+            raise ConfigError('Resposta inesperada do serviço de atalhos do Deepin.') from error
+        if 'Accels' not in info:
+            raise ConfigError('O serviço de atalhos do Deepin não registrou o atalho de captura.')
+        return [str(key) for key in info['Accels'] if str(key)]
     if str(info[0]) != SCREENSHOT_ID:
         raise ConfigError('O atalho de captura não está disponível nesta sessão.')
     # O serviço retorna "None" traduzido quando não há combinação. Consultar
@@ -139,12 +163,30 @@ class Native:
                             '-p', 'ExecStart'], check=False)
         values = dict(line.split('=', 1) for line in output.splitlines() if '=' in line)
         if values.get('LoadState') != 'loaded':
-            raise ConfigError('Recurso ainda não instalado. Aplique o playbook correspondente.')
+            raise ServiceMissing('Recurso ainda não instalado.')
         if values.get('UnitFileState') in ('masked', 'masked-runtime'):
             raise ConfigError('O serviço está bloqueado pelo usuário.')
         return {'active': values.get('ActiveState') in ('active', 'activating'),
                 'enabled': values.get('UnitFileState', 'disabled'),
                 'dry_run': '--dry-run' in values.get('ExecStart', '')}
+
+    def requirements(self, feature):
+        if feature == 'clipboard':
+            if os.environ.get('XDG_SESSION_TYPE') != 'x11':
+                raise ConfigError('A colagem automática requer uma sessão X11.')
+            for name in ('org.deepin.dde.Clipboard1', 'org.deepin.dde.XEventMonitor1'):
+                if not self.bus.name_has_owner(name):
+                    raise ConfigError('O serviço nativo de colagem não está disponível nesta sessão.')
+            if not shutil.which('xdotool'):
+                raise ConfigError('Instale xdotool para usar a colagem automática.')
+        elif feature == 'wallpaper':
+            for command in ('curl', 'file', 'gsettings'):
+                if not shutil.which(command):
+                    raise ConfigError('Dependência ausente: ' + command)
+            from gi.repository import Gio
+            source = Gio.SettingsSchemaSource.get_default()
+            if source is None or source.lookup('com.deepin.dde.appearance', True) is None:
+                raise ConfigError('A configuração nativa de aparência do Deepin está ausente.')
 
     def set_service(self, name, active, enabled):
         flag = ['--runtime'] if enabled.endswith('-runtime') else []
@@ -175,22 +217,85 @@ class Native:
 
     def screenshot(self):
         from gi.repository import Gio
+        source = Gio.SettingsSchemaSource.get_default()
+        if source is None or source.lookup('com.deepin.dde.keybinding.system', True) is None:
+            raise ConfigError('O schema de atalhos do Deepin não está disponível nesta sessão.')
         settings = Gio.Settings.new('com.deepin.dde.keybinding.system')
         return {'active': screenshot_keys(self.keybindings()),
                 'saved': list(settings.get_strv('screenshot'))}
 
+    def screenshot_generation(self, api):
+        try:
+            api.GetShortcut(SCREENSHOT_ID, timeout=3)
+            return 'dde-shell'
+        except TypeError:
+            return 'legacy'
+
+    def screenshot_conflict_owner(self, api, key, legacy):
+        if legacy:
+            raw = str(api.LookupConflictingShortcut(key, timeout=3) or '').strip()
+            if not raw:
+                return ''
+            try:
+                info = json.loads(raw)
+            except ValueError as error:
+                raise ConfigError('Resposta inesperada do serviço de atalhos do Deepin.') from error
+            identifier = str(info.get('Id', ''))
+            if identifier in (SCREENSHOT_LEGACY_ID, SCREENSHOT_ID):
+                return ''  # O próprio atalho de captura não é conflito.
+            return str(info.get('Name') or identifier)
+        conflict = api.LookupConflictShortcut(key, timeout=3)
+        if str(conflict[0]) and str(conflict[0]) != SCREENSHOT_ID:
+            return str(conflict[1])
+        return ''
+
     def set_screenshot(self, value):
         from gi.repository import Gio
         api = self.keybindings()
+        legacy = self.screenshot_generation(api) == 'legacy'
         for key in value['active']:
-            conflict = api.LookupConflictShortcut(key, timeout=3)
-            if str(conflict[0]) and str(conflict[0]) != SCREENSHOT_ID:
-                raise ConfigError('Esta combinação já está em uso por ' + str(conflict[1]) + '.')
-        accepted = api.ModifyHotkeys(SCREENSHOT_ID,
-            self.dbus.Array(value['active'], signature='s'), timeout=3) if value['active'] else api.Disable(
-                SCREENSHOT_ID, timeout=3)
-        if not accepted:
-            raise ConfigError('O Deepin não aceitou o atalho de captura.')
+            owner = self.screenshot_conflict_owner(api, key, legacy)
+            if owner:
+                raise ConfigError('Esta combinação já está em uso por ' + owner + '.')
+        if legacy:
+            # O daemon antigo retorna "false" no ModifiedAccel mesmo quando
+            # aplica a troca; a confirmação é feita pela releitura ao final.
+            raw = str(api.GetShortcut(SCREENSHOT_LEGACY_ID, 0, timeout=3) or '').strip()
+            try:
+                info = json.loads(raw) if raw else {}
+            except ValueError as error:
+                raise ConfigError('Resposta inesperada do serviço de atalhos do Deepin.') from error
+            for key in info.get('Accels', []):
+                api.ModifiedAccel(SCREENSHOT_LEGACY_ID, 0, str(key), False, timeout=3)
+            if value['active']:
+                for key in value['active']:
+                    api.ModifiedAccel(SCREENSHOT_LEGACY_ID, 0, str(key), True, timeout=3)
+            else:
+                api.Disable(SCREENSHOT_LEGACY_ID, 0, timeout=3)
+            # O daemon antigo aplica a troca de forma assíncrona; aguardar a
+            # confirmação por releitura evita recusar uma alteração válida.
+            expected = [str(key) for key in value['active']]
+            for attempt in range(10):
+                raw = str(api.GetShortcut(SCREENSHOT_LEGACY_ID, 0, timeout=3) or '').strip()
+                try:
+                    current = json.loads(raw).get('Accels', []) if raw else []
+                except ValueError:
+                    current = []
+                if [str(key) for key in current] == expected:
+                    break
+                time.sleep(0.2)
+            else:
+                raise ConfigError('O Deepin não confirmou o atalho de captura.')
+        elif value['active']:
+            accepted = api.ModifyHotkeys(SCREENSHOT_ID,
+                self.dbus.Array(value['active'], signature='s'), timeout=3)
+            if not accepted:
+                raise ConfigError('O Deepin não aceitou o atalho de captura.')
+        else:
+            api.Disable(SCREENSHOT_ID, timeout=3)
+        source = Gio.SettingsSchemaSource.get_default()
+        if source is None or source.lookup('com.deepin.dde.keybinding.system', True) is None:
+            raise ConfigError('O schema de atalhos do Deepin não está disponível nesta sessão.')
         settings = Gio.Settings.new('com.deepin.dde.keybinding.system')
         if not settings.set_strv('screenshot', value['saved']):
             raise ConfigError('Não foi possível salvar o atalho de captura.')
@@ -210,7 +315,7 @@ class Native:
 
 
 class Manager:
-    def __init__(self, native=None, home=None, state_dir=None, source=None):
+    def __init__(self, native=None, home=None, state_dir=None, source=None, resources=None):
         self.home = Path(home or Path.home())
         self.state_dir = Path(state_dir or Path(os.environ.get(
             'XDG_STATE_HOME', str(self.home / '.local/state'))) / APP_ID)
@@ -219,10 +324,30 @@ class Manager:
         self.disabled = self.state_dir / 'disabled/zclaude'
         self.state_file = self.state_dir / 'originals.json'
         self.native = native if native is not None else Native()
+        self.resources = resources or Resources(home=self.home)
+        self.user_services = UserServices(self.native, self.resources)
         self.dock_preview = DockPreview(home=self.home)
-        self.calculator_decimal = CalculatorDecimal(home=self.home)
+        # O drop-in gravado na ativação aponta para o runtime persistente;
+        # resolver o mesmo caminho aqui evita tratá-lo como personalização
+        # nas consultas de status.
+        if (self.resources.current / 'gui/dock_preview.py').is_file():
+            self.dock_preview.helper = self.resources.current / 'gui/dock_preview.py'
+        self.calculator_decimal = CalculatorDecimal(home=self.home,
+            bundle=self.resources.file('bin/deepwin-calculator').parents[1])
+        try:
+            self.calculator_decimal.plugin = self.resources.file('qt6/plugins/generic/libdeepwin-calculator.so')
+        except RuntimeError:
+            pass
 
     def load_state(self):
+        schema = self.state_dir / 'schema.json'
+        if schema.exists():
+            try:
+                value = json.loads(schema.read_text())
+                if value != {'format': 1, 'app_id': APP_ID}:
+                    raise ValueError()
+            except (ValueError, OSError) as error:
+                raise ConfigError('Formato de estado incompatível. Nenhum backup foi alterado.') from error
         if not self.state_file.exists():
             return {}
         try:
@@ -235,6 +360,7 @@ class Manager:
 
     def save_state(self, values):
         atomic_bytes(self.state_file, json.dumps(values, ensure_ascii=False, indent=2).encode())
+        atomic_bytes(self.state_dir / 'schema.json', json.dumps({'format': 1, 'app_id': APP_ID}).encode())
 
     @contextmanager
     def lock(self):
@@ -251,7 +377,15 @@ class Manager:
         if feature == 'dock_preview':
             return self.dock_preview.capture()
         if feature in SERVICES:
-            return self.native.service(SERVICES[feature])
+            try:
+                value = self.native.service(SERVICES[feature])
+            except ServiceMissing:
+                if self.user_services.existing(feature):
+                    raise ConfigError('Existe uma unidade personalizada não carregada. Nenhum arquivo foi alterado.')
+                return {'absent': True, 'files': self.user_services.snapshot(feature)}
+            if self.user_services.managed(feature):
+                value['files'] = self.user_services.snapshot(feature)
+            return value
         if feature in SHORTCUTS:
             return self.native.shortcut(SHORTCUTS[feature][0])
         if feature == 'screenshot':
@@ -267,13 +401,31 @@ class Manager:
 
     def restore_value(self, feature, value):
         if feature == 'calculator_decimal':
-            self.calculator_decimal.configure(value['enabled'])
+            if value['enabled']:
+                self.apply(feature, True)
+            else:
+                self.calculator_decimal.configure(False)
             return
         if feature == 'dock_preview':
-            self.dock_preview.configure(value['enabled'])
+            if value['enabled']:
+                self.apply(feature, True)
+            else:
+                self.dock_preview.configure(False)
             return
         if feature in SERVICES:
-            self.native.set_service(SERVICES[feature], value['active'], value['enabled'])
+            if value.get('absent'):
+                if self.user_services.existing(feature):
+                    if not self.user_services.managed(feature):
+                        raise ConfigError('Uma unidade personalizada apareceu após o backup. Preserve-a antes de restaurar.')
+                    self.native.set_service(SERVICES[feature], False, 'disabled')
+                self.user_services.restore_files(feature, value['files'])
+            else:
+                if 'files' in value:
+                    owned = self.user_services.managed(feature)
+                    if not owned and self.user_services.existing(feature):
+                        raise ConfigError('Uma unidade personalizada apareceu após o backup. Preserve-a antes de restaurar.')
+                    self.user_services.restore_files(feature, value['files'])
+                self.native.set_service(SERVICES[feature], value['active'], value['enabled'])
         elif feature in SHORTCUTS:
             self.native.set_shortcut(SHORTCUTS[feature][0], value)
         elif feature == 'screenshot':
@@ -291,12 +443,34 @@ class Manager:
 
     def apply(self, feature, enabled):
         if feature == 'calculator_decimal':
+            if enabled:
+                runtime = self.resources.ensure()
+                self.calculator_decimal.launcher = runtime / 'bin/deepwin-calculator'
+                self.calculator_decimal.plugin = runtime / 'qt6/plugins/generic/libdeepwin-calculator.so'
             self.calculator_decimal.configure(enabled)
             return
         if feature == 'dock_preview':
+            if enabled:
+                runtime = self.resources.ensure()
+                self.dock_preview.helper = runtime / 'gui/dock_preview.py'
             self.dock_preview.configure(enabled)
             return
         if feature in SERVICES:
+            if enabled:
+                if hasattr(self.native, 'requirements'):
+                    self.native.requirements(feature)
+                try:
+                    self.native.service(SERVICES[feature])
+                    prepare = self.user_services.managed(feature) is not None
+                except ServiceMissing:
+                    prepare = True
+                if prepare:
+                    self.user_services.prepare(feature)
+            else:
+                original = self.load_state().get(feature, {})
+                if original.get('absent'):
+                    self.restore_value(feature, original)
+                    return
             self.native.set_service(SERVICES[feature], enabled,
                                     'enabled' if enabled else 'disabled')
             if feature == 'wallpaper' and not enabled:
@@ -315,6 +489,7 @@ class Manager:
             self.native.set_screenshot(values)
         elif feature == 'zclaude':
             if enabled:
+                self.resources.ensure()
                 if self.wrapper.exists() and os.access(self.wrapper, os.X_OK):
                     return
                 if self.wrapper.exists() or self.wrapper.is_symlink():
@@ -379,7 +554,18 @@ class Manager:
         item = {'id': feature, 'available': True, 'enabled': False, 'status': 'Desativado'}
         try:
             if feature in SERVICES:
-                values = self.native.service(SERVICES[feature])
+                try:
+                    values = self.native.service(SERVICES[feature])
+                except ServiceMissing:
+                    self.resources.available()
+                    if self.user_services.existing(feature):
+                        raise ConfigError('Existe uma unidade local não carregada. Preserve-a e confira o systemd do usuário.')
+                    if hasattr(self.native, 'requirements'):
+                        self.native.requirements(feature)
+                    item.update(status='Pronto para ativar',
+                                note=('Será criado um timer de uma hora ao ativar.' if feature == 'wallpaper' else
+                                      'Os arquivos necessários serão preparados ao ativar este recurso.'))
+                    return item
                 item['enabled'] = values['active']
                 automatic = values['enabled'].startswith('enabled')
                 item['status'] = ('Ativo · Início automático' if automatic else 'Ativo nesta sessão') if values['active'] else (
@@ -428,7 +614,11 @@ class Manager:
             claude = ClaudeVersions(home=self.home, state_dir=self.state_dir).status()
         except Exception as error:
             claude = {'error': str(error)}
-        return {'features': features, 'restore_count': len(originals),
+        installation = {'version': self.resources.version, 'root': str(self.resources.root)}
+        local_command = self.home / '.local/bin/deepwin'
+        if str(self.resources.root).startswith('/usr/') and local_command.exists():
+            installation['note'] = 'Uma instalação local também existe. Use /usr/bin/deepwin para abrir o pacote.'
+        return {'features': features, 'installation': installation, 'restore_count': len(originals),
                 'restore_titles': [row[2] for row in FEATURES if row[0] in originals],
                 'claude': claude}
 
@@ -455,6 +645,8 @@ def main():
                               'message': 'Estado migrado para o DeepWin.' if changed else 'Nenhuma migração pendente.'},
                              ensure_ascii=False))
             return 0
+        if args.command in ('set', 'restore', 'claude-select', 'claude-restore'):
+            migrate_legacy_state()
         message = ''
         versions = ClaudeVersions()
         if args.command == 'claude-list':

@@ -414,6 +414,10 @@ private:
         if (ok) {
             model = result;
             if (!result["message"].toString().isEmpty()) message->setText(result["message"].toString());
+            else {
+                const auto installationNote = result["installation"].toObject()["note"].toString();
+                if (!installationNote.isEmpty()) message->setText(installationNote);
+            }
         } else {
             message->setText(timedOut ? "A operação demorou mais que o esperado. Atualize o painel para conferir o estado." :
                 result["message"].toString("Não foi possível consultar as configurações da sessão."));
@@ -426,7 +430,8 @@ private:
                 QTimer::singleShot(600, this, [this, ok] {
                     bool valid = ok && rows.size() == 10 &&
                         claudeChoice->findData("stable") >= 0 && claudeChoice->findData("system") >= 0;
-                    for (const auto &row : rows) valid = valid && row.available;
+                    if (QCoreApplication::arguments().contains("--check-integrations"))
+                        for (const auto &row : rows) valid = valid && row.available;
                     if (!screenshotPath.isEmpty()) valid = grab().save(screenshotPath) && valid;
                     if (smokeTest) {
                         std::printf("%s GUI DTK: %lld recursos consultados\n", valid ? "PASS" : "FAIL", static_cast<long long>(rows.size()));
@@ -439,21 +444,29 @@ private:
 };
 
 int main(int argc, char **argv) {
+    // A consulta de versão não exige sessão gráfica: responder antes de
+    // carregar o plugin de plataforma, que aborta sem display.
+    for (int i = 1; i < argc; ++i) {
+        if (qstrcmp(argv[i], "--version") == 0 || qstrcmp(argv[i], "-v") == 0) {
+            std::printf("DeepWin %s\n", DEEPWIN_VERSION);
+            return 0;
+        }
+    }
     DApplication app(argc, argv);
     app.setOrganizationName("devedu");
     app.setApplicationName("deepwin");
     app.setDesktopFileName("devedu.deepin-configs");
     app.setApplicationDisplayName("DeepWin");
-    app.setApplicationVersion("1.0.0");
+    app.setApplicationVersion(DEEPWIN_VERSION);
     app.setProductName("DeepWin");
     app.setApplicationDescription("Controle seus ajustes pessoais do Deepin.");
     app.setWindowIcon(QIcon::fromTheme("preferences-system"));
     app.loadTranslator();
     QCommandLineParser parser;
     parser.addHelpOption();
-    parser.addVersionOption();
     parser.addOption({"backend", "Caminho do controlador Python.", "arquivo"});
-    parser.addOption({"smoke-test", "Consultar recursos, validar a GUI e sair, sem alterar configurações."});
+    parser.addOption({"smoke-test", "Consultar estados, validar a abertura da GUI e sair."});
+    parser.addOption({"check-integrations", "Exigir que todas as integrações estejam disponíveis no smoke test."});
     parser.addOption({"section", "Seção inicial: overview, productivity, appearance ou tools.", "seção", "overview"});
     parser.addOption({"screenshot", "Salvar uma captura da janela.", "arquivo"});
     parser.process(app);

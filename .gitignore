@@ -141,6 +141,10 @@ id_ed25519
 /backups/
 originals.json
 controller.lock
+schema.json
+runtime.json
+service-clipboard.json
+service-wallpaper.json
 calculator-enabled.json
 claude-selection.json
 claude-versions.lock

@@ -35,6 +35,9 @@ fi
 project_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 version_helper="$project_dir/gui/claude_versions.py"
 if [[ ! -f $version_helper ]]; then
+  version_helper="${XDG_DATA_HOME:-$HOME/.local/share}/devedu.deepin-configs/runtime/current/gui/claude_versions.py"
+fi
+if [[ ! -f $version_helper ]]; then
   version_helper="${XDG_DATA_HOME:-$HOME/.local/share}/devedu.deepin-configs/gui/claude_versions.py"
 fi
 claude_bin='claude'

@@ -96,7 +96,9 @@ class DockPreview:
         return '# Gerenciado pelo DeepWin\n[Service]\nExecStartPre=-/usr/bin/python3 ' + json.dumps(path, ensure_ascii=False) + ' refresh\n'
 
     def check_dropin(self):
-        if self.dropin.is_symlink() or (self.dropin.exists() and self.dropin.read_text() != self.dropin_text()):
+        legacy_helper = self.data_home / APP_ID / 'gui/dock_preview.py'
+        legacy_text = '# Gerenciado pelo DeepWin\n[Service]\nExecStartPre=-/usr/bin/python3 ' + json.dumps(str(legacy_helper).replace('%', '%%'), ensure_ascii=False) + ' refresh\n'
+        if self.dropin.is_symlink() or (self.dropin.exists() and self.dropin.read_text() not in (self.dropin_text(), legacy_text)):
             raise DockPreviewError('O ajuste de inicialização do dock foi personalizado. Preserve-o antes de continuar.')
 
     def build(self):

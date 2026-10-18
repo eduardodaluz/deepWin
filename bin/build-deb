@@ -1,0 +1,103 @@
+#!/usr/bin/python3
+"""Gera o .deb em staging; --container usa o ambiente oficial do Deepin 25."""
+import argparse
+import hashlib
+import fcntl
+import re
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def copy_source(destination):
+    for name in ('bin', 'gui', 'tests', 'packaging', 'cmake', 'debian'):
+        shutil.copytree(ROOT / name, destination / name,
+                        ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*.log'))
+    for name in ('CMakeLists.txt', 'VERSION', 'LICENSE', 'resources.json', 'README.md', '.gitignore'):
+        shutil.copyfile(ROOT / name, destination / name)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--container', action='store_true', help='compilar em Docker, sem instalar SDK no host')
+    parser.add_argument('--reuse-image', action='store_true', help='reutilizar imagem de build já preparada; dpkg continua validando dependências')
+    parser.add_argument('--output', type=Path, default=ROOT / 'dist')
+    args = parser.parse_args()
+    output = args.output.resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    work = ROOT / '.build/deb'
+    work.mkdir(parents=True, exist_ok=True)
+    lock = (work/'build.lock').open('a')
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    with tempfile.TemporaryDirectory(prefix='source-', dir=work) as temporary:
+        stage = Path(temporary) / 'deepwin'
+        stage.mkdir()
+        copy_source(stage)
+        if args.container:
+            if not shutil.which('docker'):
+                parser.error('Docker não encontrado; instale as dependências Debian e execute sem --container.')
+            image = 'deepwin-deb-build:' + (ROOT / 'VERSION').read_text().strip()
+            if not args.reuse_image:
+                # Metadados e dependências de execução não invalidam o cache do SDK.
+                context = Path(temporary) / 'context'
+                (context / 'debian').mkdir(parents=True)
+                control = (ROOT / 'debian/control').read_text()
+                depends = re.search(r'^Build-Depends:.*(?:\n[ \t].*)*', control, re.M)
+                if not depends:
+                    raise SystemExit('Build-Depends não encontrado em debian/control.')
+                (context / 'debian/control').write_text('Source: deepwin-build-deps\n' + depends[0] +
+                    '\n\nPackage: deepwin-build-deps\nArchitecture: all\nDescription: Build dependencies\n')
+                shutil.copyfile(ROOT / 'packaging/Dockerfile.deb', context / 'Dockerfile')
+                subprocess.run(['docker', 'build', '-t', image, str(context)], check=True)
+            script = '''cp -a /source /build/deepwin
+cd /build/deepwin
+dpkg-buildpackage -us -uc -b
+for artifact in /build/*.deb /build/*.buildinfo /build/*.changes; do
+    test ! -f "$artifact" || cp "$artifact" /out/
+done
+lintian --allow-root --fail-on error /build/devedu.deepin-configs_*.deb > /out/deepwin-lintian.txt 2>&1 || {
+    cat /out/deepwin-lintian.txt
+    exit 1
+}
+/usr/bin/python3 - <<'OWNERSHIP'
+import os
+from pathlib import Path
+root = Path('/out')
+owner = root.stat()
+for pattern in ('devedu.deepin-configs*.deb', 'devedu.deepin-configs*.buildinfo',
+                'devedu.deepin-configs*.changes', 'deepwin-lintian.txt'):
+    for path in root.glob(pattern):
+        os.chown(path, owner.st_uid, owner.st_gid)
+OWNERSHIP
+'''
+            subprocess.run(['docker', 'run', '--rm',
+                            '--mount', 'type=bind,src=' + str(stage) + ',dst=/source,readonly',
+                            '--mount', 'type=bind,src=' + str(output) + ',dst=/out',
+                            image, '/bin/sh', '-eu', '-c', script], check=True)
+        else:
+            if not shutil.which('dh') or not shutil.which('cmake'):
+                parser.error('Instale as dependências de build ou use --container. Nenhum pacote foi instalado no host.')
+            subprocess.run(['dpkg-buildpackage', '-us', '-uc', '-b'], cwd=stage, check=True)
+            for pattern in ('*.deb', '*.buildinfo', '*.changes'):
+                for artifact in stage.parent.glob(pattern):
+                    shutil.copyfile(artifact, output / artifact.name)
+            if shutil.which('lintian'):
+                packages = list(output.glob('devedu.deepin-configs_*.deb'))
+                report = subprocess.run(['lintian', '--fail-on', 'error', *map(str, packages)],
+                                        capture_output=True, text=True)
+                (output / 'deepwin-lintian.txt').write_text(report.stdout + report.stderr)
+                report.check_returncode()
+    packages = list(output.glob('devedu.deepin-configs_*.deb'))
+    if not packages:
+        raise SystemExit('O build não gerou o pacote principal.')
+    for package in output.glob('*.deb'):
+        digest = hashlib.sha256(package.read_bytes()).hexdigest()
+        package.with_suffix(package.suffix + '.sha256').write_text(digest + '  ' + package.name + '\n')
+    print('Pacotes e checksums disponíveis em:', output)
+
+
+if __name__ == '__main__':
+    main()

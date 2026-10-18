@@ -7,7 +7,12 @@ case "$0" in
 esac
 resource_dir=$(CDPATH= cd -- "$(dirname -- "$launcher")/.." && pwd)
 plugin_dir=$resource_dir/qt6/plugins
-flag=$resource_dir/calculator-enabled.json
+flag=${XDG_DATA_HOME:-$HOME/.local/share}/devedu.deepin-configs/calculator-enabled.json
+if [ "${1:-}" = --deepwin-flag ]; then
+    [ "$#" -ge 2 ] || exit 2
+    flag=$2
+    shift 2
+fi
 
 # Executar dentro do Linglong preserva os plugins de tema e integração nativos.
 # Os caminhos são argumentos posicionais, nunca interpolados no código do shell.

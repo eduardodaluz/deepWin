@@ -37,8 +37,9 @@ a chave de API não precisa ser lida, exibida, alterada ou apagada pelo painel.
 A rotação nativa de imagens do Deepin e o timer de download são independentes.
 Quando a rotação nativa está ativa, o painel apresenta uma observação na seção
 Aparência. O switch controla somente o timer de download. A frequência depende
-da configuração desse timer; as unidades precisam existir previamente, pois o
-playbook de papel de parede faz apenas uma troca de imagem por chamada.
+da configuração desse timer. Em instalações novas, o painel prepara as unidades
+com intervalo de uma hora; timers existentes são preservados. O playbook de
+papel de parede faz apenas uma troca de imagem por chamada.
 
 Desativar um atalho remove somente a combinação listada, preservando outras
 atribuições da mesma ação. A restauração usa o estado capturado pelo painel
@@ -88,8 +89,9 @@ Os testes unitários cobrem decisões de colagem, atalhos, backups, restauraçã
 migração de estado e movimentação do wrapper. Eles usam adaptadores simulados
 para as configurações do sistema. Os comandos estão no README.
 
-O modo `--smoke-test` consulta os dez recursos sem alterá-los; seu resultado
-depende de essas integrações estarem disponíveis na sessão. O teste gráfico
+O modo `--smoke-test` verifica a abertura e a consulta dos dez recursos sem
+alterá-los, permitindo integrações opcionais ausentes. Acrescentar
+`--check-integrations` exige disponibilidade de todas as integrações. O teste gráfico
 `tests/verify_configs_gui.py` exige sessão desbloqueada, GUI fechada, colagem
 ativa e nenhum backup pendente. Ele desativa a colagem e usa o diálogo de
 restauração, preservando o estado original em um bloco `finally`.
