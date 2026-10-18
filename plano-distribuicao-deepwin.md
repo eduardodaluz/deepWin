@@ -9,9 +9,14 @@ prova empírica de que o container alcança a sessão hospedeira (D-Bus de
 sessão, systemd do usuário, `$HOME` real, rootfs do host em leitura) e a
 decisão por acesso direto. O candidato
 `devedu.deepin-configs_1.1.0.0_x86_64_main.uab` foi gerado por `bin/build-uab`
-em Docker, com smoke de `dbus`/`gi` dentro do sandbox. Pendem o aceite da
-fase 2 em VM limpa e a decisão de publicar o workflow Linyaps na CI. A fase 3
-permanece futura. O diagnóstico e os checklists abaixo registram o plano
+em Docker e **aceitado na VM**: instalação, abertura pelo menu, 10/10
+recursos disponíveis pelo sandbox, estado compartilhado com o `.deb`
+(`restore_count: 9`), escrita do sandbox aplicada pelo systemd do host,
+proteção de unidade personalizada, remoção preservando serviços e
+`deepwin-restore`, e provas visuais humanas (prévias da dock, vírgula,
+atalhos, colagem). O runtime foi fixado na série 25.2.2 porque instalar
+UAB não puxa Base/Runtime do repositório e a série stock já está presente.
+Pende apenas o job Linyaps no GitHub Actions ficar verde; a fase 3 segue. O diagnóstico e os checklists abaixo registram o plano
 original; consulte a [passagem de desenvolvimento](continuidade-desenvolvimento.md)
 para o estado efetivo, os testes realizados e as pendências antes de marcar
 entregas concluídas.

@@ -507,3 +507,12 @@ persistência "após reinício do container" é inerente ao modelo — cada
 consistentemente entre execuções. Reboot completo da VM ficou para a rodada
 manual do mantenedor (sem certeza de autologin, o reboot derrubaria a sessão
 que os testes usam).
+
+Provas visuais humanas confirmadas pelo mantenedor na sessão da VM
+(grab `Ctrl+Alt+G`): DeepWin aberto pelo menu a partir do app Linyaps, dez
+switches refletindo os estados reais, vírgula decimal na calculadora
+reabrindo pelo menu, prévia ao clicar em grupo da dock, recorte
+Win+Shift+S, colagem Win+V + Enter, e workspaces Ctrl+Win+←/→. Com isso,
+todos os critérios de aceite da fase 2 estão satisfeitos, pendendo apenas o
+job do GitHub Actions para o `.uab` no commit `e0877d1` (o workflow passou a
+publicar o log de falha como anotação depois do primeiro run cego).
