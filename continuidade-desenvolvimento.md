@@ -14,10 +14,10 @@ Atualizado em **18/10/2026**, na retomada da correção da CI do Linyaps.
   coautoria do Claude**: o mantenedor pediu a remoção (seis commits
   reescritos com árvores idênticas e force push com lease) e commits novos
   devem sair sem o trailer.
-- Alterações desta retomada estão **commitadas apenas localmente**.
-  `git push origin main` foi rejeitado pela revisão automática: ela exige
-  autorização explícita do mantenedor para alterar a branch padrão.
-  `origin/main` permanece em `471a2dd`; não há run da CI com estas mudanças.
+- O mantenedor **autorizou explicitamente o push à `main`** após a rejeição
+  automática inicial. O download anônimo do espelho passou após mudar a
+  visibilidade para Public. Correção pronta para envio e execução na CI;
+  consultar o adendo mais recente para o resultado.
 - **Fase 1 (.deb): concluída e publicada em CI.** Candidato
   `devedu.deepin-configs_1.1.0-3_amd64.deb`; workflow Debian verde em todos
   os pushes; aceite em VM completo (adendo de 18/10).
@@ -38,10 +38,8 @@ Atualizado em **18/10/2026**, na retomada da correção da CI do Linyaps.
   de repositório `DEEPWIN_BUILDER_IMAGE` permite trocar a origem.
   **Espelho publicado após o login do mantenedor:**
   `ghcr.io/eduardodaluz/linyaps-builder@sha256:9170f635112d5068ef815d6e55d6bd3969e668151bd31a33ca48086f53fd372a`.
-  O workflow local já usa esse digest como padrão, mas **a imagem ainda
-  está privada**: o primeiro pull anônimo retornou `unauthorized`. Foi
-  solicitado ao mantenedor torná-la pública nas configurações do pacote;
-  repetir o teste anônimo antes de enviar o workflow.
+  O workflow usa esse digest como padrão. **A imagem é pública e o pull
+  anônimo pelo digest passou**, usando configuração Docker temporária vazia.
   Procedimento em [packaging/linyaps-builder.md](packaging/linyaps-builder.md).
 - **Fase 3 (portátil `.tar.xz`): não iniciada** — é a próxima após a CI do
   Linyaps fechar; a base comum (runtime persistente, staging, migração) já
@@ -70,10 +68,8 @@ unidades customizadas — conflitos se informam, nunca se sobrescrevem.
 
 Sequência sugerida para a próxima passagem:
 
-1. Tornar pública a imagem já publicada no GHCR e validar pull anônimo.
-   Obter autorização explícita para `git push origin main`, ainda pendente
-   após a rejeição automática; enviar a correção e rodar a CI até o
-   `Linyaps package` ficar verde. O workflow local já seleciona o digest
+1. Enviar a correção autorizada e rodar a CI até o `Linyaps package` ficar
+   verde. Espelho público e pull anônimo já confirmados. O workflow seleciona o digest
    do GHCR sem exigir configuração de variável; consultar o adendo mais recente.
 2. Decidir com o mantenedor o primeiro Release (`.deb` + `.uab` + checksums
    + requisitos de runtime na página).
@@ -672,3 +668,13 @@ O envio dos commits à `main` continua aguardando autorização explícita,
 solicitada novamente nesta retomada por causa da rejeição automática anterior.
 O sucesso do login Docker informado pelo mantenedor autoriza prosseguir com
 o espelhamento, mas não foi tratado como aprovação do push ao Git.
+
+## Visibilidade pública e autorização de push — 18/10/2026
+
+O mantenedor confirmou os dois passos pendentes: tornar o pacote público e
+**autorizar o envio dos commits para `origin/main` e a execução da CI**.
+O teste anônimo foi repetido com uma configuração Docker temporária vazia,
+sem credenciais, e passou para o digest GHCR
+`sha256:9170f635112d5068ef815d6e55d6bd3969e668151bd31a33ca48086f53fd372a`.
+A autorização elimina o bloqueio anterior do push; a confirmação da CI
+continua sendo o próximo passo. Sem Release ou tag de aplicação publicados.
