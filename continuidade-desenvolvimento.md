@@ -6,7 +6,7 @@ o ponto de partida atual para o próximo agente.
 
 ## Ponto de partida para o próximo agente
 
-Atualizado em **18/10/2026**, ao preparar a publicação autorizada do Release.
+Atualizado em **18/10/2026**, após publicar e conferir o Release 1.1.0.
 
 - Repositório: <https://github.com/eduardodaluz/deepWin>, branch `main`.
   Consulte `git log -1` para o commit atual. **Nenhum commit contém linha de
@@ -19,16 +19,14 @@ Atualizado em **18/10/2026**, ao preparar a publicação autorizada do Release.
   [39179478622](https://github.com/eduardodaluz/deepWin/actions/runs/39179478622),
   [39179478573](https://github.com/eduardodaluz/deepWin/actions/runs/39179478573)
   e [39179478620](https://github.com/eduardodaluz/deepWin/actions/runs/39179478620).
-- **Fase 1 (.deb): concluída e publicada em CI.** Candidato
-  `devedu.deepin-configs_1.1.0-3_amd64.deb`; workflow Debian verde em todos
-  os pushes; aceite em VM completo (adendo de 18/10).
-- **Fase 2 (Linyaps `.uab`): concluída e aceita em VM.** Candidato atual
+- **Fase 1 (.deb): concluída e publicada no Release.** Arquivo
+  `devedu.deepin-configs_1.1.0-3_amd64.deb`; CI e aceite em VM completos.
+- **Fase 2 (Linyaps `.uab`): concluída, aceita em VM e publicada.** Arquivo
   `devedu.deepin-configs_1.1.0.0_x86_64_main.uab`, sha256
-  `de77d61478d540d837d2c6bf5026cf0fd09cc7c587cde41c8311786b06e8bc87` — este é
-  o build com o pin `org.deepin.runtime.dtk/25.2.2` e os fixes de
-  `XDG_DATA_DIRS`; o `8a68fdd8…` citado no adendo da fase 2 foi o build
-  intermediário em 6.7.0. Os sete critérios da L2 têm evidência (adendos
-  seguintes).
+  `44a8c1ba5aebb08c95b5c67c69cb113c309530ffad2522b15c4db9f426d4dbe9`.
+  O Release usa o artefato da CI no código `07fb017`, com runtime 25.2.2 e
+  fixes de `XDG_DATA_DIRS`. Os hashes diferentes nos adendos pertencem a
+  candidatos anteriores; não usar como checksum do arquivo publicado.
 - **CI da fase 2 concluída.** O pull no runner passou após o espelhamento;
   a CI revelou mais duas diferenças em relação ao host de desenvolvimento
   (namespaces e UID do staging), corrigidas e validadas localmente e no
@@ -43,24 +41,23 @@ Atualizado em **18/10/2026**, ao preparar a publicação autorizada do Release.
   anônimo pelo digest passou**, usando configuração Docker temporária vazia.
   Procedimento em [packaging/linyaps-builder.md](packaging/linyaps-builder.md).
 - **Fase 3 (portátil `.tar.xz`): concluída, aceita em imagem limpa, snapshot
-  de VM com sessão gráfica e [CI](https://github.com/eduardodaluz/deepWin/actions/runs/39179478620).** Candidato local
+  de VM com sessão gráfica e [CI](https://github.com/eduardodaluz/deepWin/actions/runs/39179478620), publicada no Release.** Arquivo
   `DeepWin-1.1.0-amd64-portable.tar.xz`, SHA-256
-  `2c4130b5bb0bb9ef8ed8751b0bb6aac9a35f39f5abc4ea5784a3ed1861a2038e`.
+  `feb141dd8c925899ec5f235fc84aed203ce6dadbf6a9f7b49ee6dc3ef000cbbc`.
   Reutiliza o staging CMake e os runtimes nativos Qt/DTK/Python do Deepin 25;
   não é autocontido. A aplicação abre por `./deepwin`; menu opcional por
   `./register-menu` e `./unregister-menu`, preservando personalizações.
   Build, verificação limpa, menu seguro, movimentação/remoção, restauração
   real e rollback entre versões foram testados; consultar o último adendo.
-- **Publicação autorizada pelo mantenedor** após o aceite dos três formatos:
-  primeiro Release **1.1.0**, com `.deb`, `.uab` e `.tar.xz` juntos.
-  [Notas finais](packaging/release-notes-1.1.0.md) e workflow de publicação
-  preparados. A tag `v1.1.0` foi enviada, preservada em `66d0b5c`; os três
-  instaladores passaram na conferência e foram enviados ao rascunho.
-  A consulta por tag não encontra rascunhos e interrompeu a primeira
-  execução antes de publicar. A correção consulta por ID e permite retomar
-  pelo push à `main` de alterações na automação, validando novamente todos
-  os anexos. Não reutiliza credenciais do Docker. Até conferir o Release
-  público, não considerar a publicação concluída.
+- **Primeiro Release publicado e conferido**, após autorização do mantenedor:
+  [DeepWin 1.1.0](https://github.com/eduardodaluz/deepWin/releases/tag/v1.1.0),
+  com `.deb`, `.uab`, `.tar.xz`, três sidecars e `SHA256SUMS`.
+  [Publicação aprovada](https://github.com/eduardodaluz/deepWin/actions/runs/39181338129)
+  às 21h34 de 18/10/2026 (UTC-3). Tag `v1.1.0` preservada em `66d0b5c`;
+  código dos instaladores: `07fb017`. A diferença é documentação e automação.
+  A publicação usa somente o token da própria execução do Actions.
+  **Não recriar a tag nem substituir anexos:** próximas correções devem
+  passar por nova versão. Notas em [packaging](packaging/release-notes-1.1.0.md).
 - Ambiente preservado: VM de aceite **desligada** em `~/deepwin-vm/`
   (quando no ar, SSH porta 2222, usuário `deepwin` com sudo NOPASSWD;
   para tocar a sessão gráfica por SSH, exportar `DISPLAY=:0`,
@@ -82,8 +79,8 @@ unidades customizadas — conflitos se informam, nunca se sobrescrevem.
 
 Sequência sugerida para a próxima passagem:
 
-1. Concluir a publicação autorizada e conferir o Release público `v1.1.0`,
-   com os três instaladores, três checksums individuais e `SHA256SUMS`.
+1. Acompanhar o uso do Release 1.1.0; o objetivo de distribuição dos três
+   formatos está concluído. Definir novo escopo antes da próxima versão.
 2. Itens menores registrados: reboot completo da VM como teste
    complementar (autologin não confirmado), decisão de submeter o `.uab` à
    loja Linyaps (etapa distinta da geração do pacote), e reavaliar a
@@ -904,3 +901,30 @@ também responde a mudanças na própria automação na `main`, com tag fixada
 por commit e conferência de que apenas documentação/automação diferem do
 código aceito. Oito testes passaram, incluindo regressão da consulta de
 rascunho e recusa de edição/publicação prévia. Não há sobrescrita de anexos.
+
+## Primeiro Release publicado — 18/10/2026
+
+O [DeepWin 1.1.0](https://github.com/eduardodaluz/deepWin/releases/tag/v1.1.0)
+foi publicado às **21h34 (UTC-3)**, após a conferência do rascunho por ID.
+O [workflow de publicação 39181338129](https://github.com/eduardodaluz/deepWin/actions/runs/39181338129)
+terminou com sucesso no commit de automação `ce701e4`. A tag `v1.1.0` está
+preservada em `66d0b5c`; o código dos três instaladores é o mesmo `07fb017`
+aceito pelos workflows Debian, Linyaps e portátil. Não houve novo build,
+alteração de runtime ou acesso a credenciais Docker para publicar.
+
+| Instalador publicado | SHA-256 |
+| --- | --- |
+| `devedu.deepin-configs_1.1.0-3_amd64.deb` | `7745697e0a5ac423dc632b696c3591c21077007d25a8c1220dfd1fedc779701e` |
+| `devedu.deepin-configs_1.1.0.0_x86_64_main.uab` | `44a8c1ba5aebb08c95b5c67c69cb113c309530ffad2522b15c4db9f426d4dbe9` |
+| `DeepWin-1.1.0-amd64-portable.tar.xz` | `feb141dd8c925899ec5f235fc84aed203ce6dadbf6a9f7b49ee6dc3ef000cbbc` |
+
+São sete anexos: os três instaladores, seus três `.sha256` e `SHA256SUMS`.
+Além da conferência dos digests de upload no workflow, todos foram baixados
+publicamente sem autenticação e conferidos por tamanho/digest da API. A
+verificação `sha256sum -c` passou tanto para `SHA256SUMS` quanto para cada
+sidecar. Os downloads temporários usados nessa conferência foram removidos.
+
+README e plano de distribuição agora apontam para o Release disponível.
+As seções anteriores permanecem históricas; qualquer próxima correção deve
+receber nova versão, preservando a tag e os anexos desta entrega. O objetivo
+de implementação, aceite e publicação dos três formatos está concluído.

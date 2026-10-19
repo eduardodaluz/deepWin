@@ -19,9 +19,15 @@ Ele permite habilitar e desabilitar dez recursos:
 - Download automático de paisagens.
 - Disponibilidade do comando `zclaude`.
 
+Baixe o [DeepWin 1.1.0](https://github.com/eduardodaluz/deepWin/releases/tag/v1.1.0)
+para **Deepin 25 amd64** em `.deb`, `.uab` ou portátil `.tar.xz`.
+Cada instalador acompanha um arquivo `.sha256`; confira o checksum antes de
+instalar. Os requisitos e instruções por formato estão nas notas do Release
+e nas seções abaixo.
+
 ### Instalação pelo pacote Debian
 
-O pacote de teste da fase 1 tem como alvo **Deepin 25 amd64**, já validado em
+O pacote Debian tem como alvo **Deepin 25 amd64**, já validado em
 imagem limpa e em VM com sessão gráfica completa: instalação, abertura,
 atualização com recursos ativos, remoção e o comando de restauração
 independente. O workflow de Actions gera e valida o pacote a cada push e
@@ -58,12 +64,12 @@ Lintian. Os pacotes, relatórios e checksums ficam em `dist/`.
 e remoção em uma imagem limpa, sem montar a pasta pessoal do usuário; o fluxo
 completo já passa. Para build nativo,
 instale as dependências de `debian/control` e execute `./bin/build-deb`.
-A validação em container não substitui o aceite final em uma VM com desktop
-Deepin completo; este pacote deve ser tratado inicialmente como versão de teste.
+A validação em container é complementada pelo aceite em VM com desktop
+Deepin completo, registrado na passagem de desenvolvimento.
 
 ### Build pelo pacote Linyaps (.uab)
 
-O candidato da fase 2 empacota a mesma aplicação para o **Linyaps** (antigo
+O pacote `.uab` distribui a mesma aplicação para o **Linyaps** (antigo
 Linglong), formato de distribuição do Deepin 25. A prova de integração com o
 sistema hospedeiro está registrada na
 [matriz de acesso](matriz-acesso-linyaps.md): o container expõe o D-Bus da
@@ -95,13 +101,13 @@ beige dentro do pacote, carregadas por um bootstrap no backend e no helper de
 colagem; no `.deb` elas continuam vindo por `Depends`. No pacote Linyaps, a
 instalação de versões do Claude pelo seletor da GUI fica indisponível (sem
 `npm` no sandbox); o comando `zclaude` do terminal segue funcionando, pois
-executa no host. O candidato foi aceito em VM Deepin 25.2.0 com Linyaps
+executa no host. O pacote foi aceito em VM Deepin 25.2.0 com Linyaps
 1.13.7, incluindo os dez recursos e a preservação dos helpers após remoção.
 A série Base/Runtime 25.2.2 deve estar instalada; a instalação de um arquivo
 UAB não baixa esses componentes automaticamente. O workflow Linyaps gera o
 UAB com checksum e passou também no runner limpo do GitHub. A primeira
-publicação em Releases ainda depende de decisão do mantenedor; há um
-[rascunho das notas](packaging/release-notes-1.1.0.md) para revisão.
+publicação em Releases reúne este formato com Debian e portátil;
+consulte as [notas da versão 1.1.0](packaging/release-notes-1.1.0.md).
 
 ### Execução pelo portátil (.tar.xz)
 
@@ -141,9 +147,8 @@ e seu SHA-256 em `dist/`. A validação usa outro container com somente
 dependências de execução, sem instalar o pacote DeepWin, e testa caminhos
 com espaços, pasta somente leitura, menu e persistência após remoção.
 
-O primeiro Release **1.1.0 reunirá `.deb`, `.uab` e `.tar.xz`**, conforme
-decisão do mantenedor, após o aceite do portátil. Os artefatos ainda não
-foram publicados em Releases.
+O [Release 1.1.0](https://github.com/eduardodaluz/deepWin/releases/tag/v1.1.0)
+reúne `.deb`, `.uab` e `.tar.xz`, com checksums individuais e `SHA256SUMS`.
 
 ### Instalação pelo código-fonte
 
