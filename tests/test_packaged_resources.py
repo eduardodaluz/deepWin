@@ -319,13 +319,14 @@ class LegacyScreenshotTests(unittest.TestCase):
     def setUp(self):
         import gi  # noqa: F401 — garante que a falha seja clara se python3-gi faltar
         self.api = LegacyKeybindingAPI(lag=2)
+        self.settings = FakeSettings()
         self.native = object.__new__(backend.Native)
         keybindings = patch.object(backend.Native, 'keybindings', return_value=self.api)
         keybindings.start()
         self.addCleanup(keybindings.stop)
         source = patch('gi.repository.Gio.SettingsSchemaSource.get_default',
                        return_value=FakeSchemaSource())
-        settings = patch('gi.repository.Gio.Settings.new', return_value=FakeSettings())
+        settings = patch('gi.repository.Gio.Settings.new', return_value=self.settings)
         source.start()
         settings.start()
         self.addCleanup(source.stop)
@@ -335,6 +336,22 @@ class LegacyScreenshotTests(unittest.TestCase):
         value = {'active': ['<Shift><Super>S'], 'saved': ['<Control><Alt>A', '<Shift><Super>S']}
         self.native.set_screenshot(value)
         self.assertEqual(self.native.screenshot(), value)
+
+    def test_set_screenshot_persists_chosen_keys_over_previous_value(self):
+        # Regressão: o daemon antigo relê o dsettings ao reiniciar a sessão.
+        # Gravar o valor anterior fazia o serviço voltar ao padrão e acumular
+        # a combinação do painel (duas combinações ativas de uma vez).
+        value = {'active': ['<Shift><Super>S'], 'saved': ['<Control><Alt>A']}
+        self.native.set_screenshot(value)
+        self.assertEqual(self.settings.values['screenshot'], ['<Shift><Super>S'])
+        self.assertEqual(self.native.screenshot(),
+                         {'active': ['<Shift><Super>S'], 'saved': ['<Shift><Super>S']})
+
+    def test_set_screenshot_disable_persists_empty_key_list(self):
+        value = {'active': [], 'saved': ['<Control><Alt>A']}
+        self.native.set_screenshot(value)
+        self.assertEqual(self.settings.values['screenshot'], [])
+        self.assertEqual(self.native.screenshot(), {'active': [], 'saved': []})
 
 
 class OptionalNativeTests(unittest.TestCase):

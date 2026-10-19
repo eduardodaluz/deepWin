@@ -350,8 +350,15 @@ class Native:
         if source is None or source.lookup('com.deepin.dde.keybinding.system', True) is None:
             raise ConfigError('O schema de atalhos do Deepin não está disponível nesta sessão.')
         settings = Gio.Settings.new('com.deepin.dde.keybinding.system')
-        if not settings.set_strv('screenshot', value['saved']):
+        # No daemon antigo o ModifiedAccel não sobrevive ao reinício da
+        # sessão: o que o serviço relê no login é este dsettings, então a
+        # combinação escolhida precisa chegar lá, não o valor anterior.
+        # (Regressão observada na VM de aceite: após reiniciar a sessão o
+        # serviço voltava ao padrão com a combinação do painel acumulada.)
+        persisted = list(value['active']) if legacy else list(value['saved'])
+        if not settings.set_strv('screenshot', persisted):
             raise ConfigError('Não foi possível salvar o atalho de captura.')
+        value['saved'] = persisted
         Gio.Settings.sync()
         if self.screenshot() != value:
             raise ConfigError('O Deepin não confirmou a configuração de captura.')
