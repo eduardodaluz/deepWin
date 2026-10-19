@@ -42,9 +42,10 @@ mantenedor (ver adendo no fim deste documento para o detalhe completo).
   (`['<Control><Alt>A', '<Shift><Super>S']`); não há remoção persistente.
   Correção parcial no backend (dsettings grava a lista escolhida) já no
   código, com testes; **comprovada necessária e insuficiente**. Correção
-  definitiva (unidade por login no padrão do clipboard) está desenhada no
-  adendo, sem implementação — o esboço iniciado foi revertido para não
-  deixar o repositório inconsistente na interrupção.
+  definitiva (unidade por login no padrão do clipboard) especificada em
+  [plano-atalho-captura.md](plano-atalho-captura.md), sem implementação —
+  o esboço iniciado foi revertido para não deixar o repositório
+  inconsistente na interrupção.
 - **Atalhos entre monitores**: teste ainda pendente; launcher preparado em
   `~/deepwin-vm/start-vm-dual.sh` (virtio-gpu com duas saídas, headless) e
   procedimento de snapshot descrito no adendo.
@@ -98,7 +99,7 @@ bloqueios retroativos do Release aceito pelo mantenedor.
 | Instruções de repositório/loja Linyaps (L2) | **Guia escrito nesta retomada** ([packaging/linyaps-store-guide.md](packaging/linyaps-store-guide.md)): dois canais (Repository-Manager e loja UnionTech), CLA, aprovação e requisitos. Pendência de decisão: o ID `devedu.deepin-configs` não atende à spec de domínio reverso comprovado; submeter exige resolver o identificador. |
 | Instalador gráfico do Deepin (aceite da fase 1) | **Evidência registrada nesta retomada.** Fluxo completo do instalador gráfico executado na VM com o `.deb` do Release e conferido até `dpkg ii`, sem criar estado. Detalhe operacional: o diálogo de polkit não aparece na sessão de autologin; usar regra temporária (removida após o teste). |
 | Reinício completo da VM e nova sessão | **Executado nesta retomada.** Serviços (clipboard ativo do runtime persistente), backups (9), flag da calculadora e ausência do timer de wallpaper confirmados após reboot com nova sessão. O atalho de captura regrediu como o adendo da fase 1 antecipava — ver linha seguinte. |
-| Regressão do atalho de captura (daemon antigo) | **Reproduzida com detalhe novo:** após o login o daemon une o padrão `<Control><Alt>A` à combinação do painel. Correção parcial no backend (dsettings grava a lista escolhida) está no código com testes; a prova na VM mostrou que **não basta** — o dsettings é aditivo. Correção definitiva desenhada (unidade por login), sem implementação. |
+| Regressão do atalho de captura (daemon antigo) | **Reproduzida com detalhe novo:** após o login o daemon une o padrão `<Control><Alt>A` à combinação do painel. Correção parcial no backend (dsettings grava a lista escolhida) está no código com testes; a prova na VM mostrou que **não basta** — o dsettings é aditivo. Correção definitiva especificada em [plano-atalho-captura.md](plano-atalho-captura.md), aguardando implementação. |
 | Atalhos de mover janela entre monitores | **Teste interativo complementar pendente.** Launcher de dois monitores preparado (`~/deepwin-vm/start-vm-dual.sh`) com procedimento de snapshot no adendo; validar `Shift+Win+←/→` e registrar o resultado. |
 | Publicação da próxima versão | **Automação parametrizada nesta retomada** (`.github/releases/` + `release.yml` por dispatch). A próxima versão exige apenas a definição JSON nova, tag e dispatch — sem editar código do publicador. |
 | Compatibilidade após atualizar Linyaps/Qt | **Manutenção condicionada à mudança de alvo.** Revalidar acesso aos diretórios XDG compartilhados ao adotar outra versão do Linyaps; revisar ABI do plugin ao mudar a major do Qt ou testar Qt anterior a 6.8. O aceite publicado é Deepin 25 amd64/X11. |
@@ -1070,19 +1071,9 @@ necessária e insuficiente** pelo experimento acima.
 
 Correção definitiva desenhada (não implementada; o esboço iniciado foi
 revertido na interrupção): unidade de usuário oneshot por sessão, no padrão
-do clipboard — `deepin-shortcut-reapply.service` (template em
-`packaging/systemd/`, `WantedBy=dde-session-initialized.target`,
-`ExecCondition` x11) executando helper `bin/deepin-shortcut-reapply`
-(stdlib + `bootstrap_runtime_python`), que lê o dsettings, detecta a
-geração (na nova sai sem fazer nada) e converge o runtime via
-`ModifiedAccel` com re-checagem; `SERVICE_FILES['screenshot']`,
-substituição `@SHORTCUT_EXEC@` no `user_services.prepare`, cabeamento em
-`capture` (snapshot `files`/`absent` do recurso), `apply` (prepara/habilita
-a unidade só na geração antiga) e `restore_value` (restaura/remove a
-unidade com as mesmas proteções de personalização dos serviços). Um teste
-de convergência com API falsa completa o conjunto. Especificação
-detalhada neste adendo; implementação estimada em meia sessão + aceite em
-VM (rebuild do `.deb`, ativação, reboot, conferir `['<Shift><Super>S']`).
+do clipboard — especificação completa (helper, template, cabeamento,
+recursos, testes e aceite em VM) em
+[plano-atalho-captura.md](plano-atalho-captura.md).
 
 ### Dois monitores (não executado; preparado)
 
