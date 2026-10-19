@@ -6,7 +6,8 @@ o ponto de partida atual para o próximo agente.
 
 ## Ponto de partida para o próximo agente
 
-Atualizado em **18/10/2026**, após publicar e conferir o Release 1.1.0.
+Atualizado em **18/10/2026**, após revisar as pendências do plano com o
+Release 1.1.0 publicado e conferido.
 
 - Repositório: <https://github.com/eduardodaluz/deepWin>, branch `main`.
   Consulte `git log -1` para o commit atual. **Nenhum commit contém linha de
@@ -79,13 +80,42 @@ unidades customizadas — conflitos se informam, nunca se sobrescrevem.
 
 Sequência sugerida para a próxima passagem:
 
-1. Acompanhar o uso do Release 1.1.0; o objetivo de distribuição dos três
-   formatos está concluído. Definir novo escopo antes da próxima versão.
-2. Itens menores registrados: reboot completo da VM como teste
-   complementar (autologin não confirmado), decisão de submeter o `.uab` à
-   loja Linyaps (etapa distinta da geração do pacote), e reavaliar a
-   privatização de `XDG_*_HOME` quando sair a próxima minor do linyaps
-   (1.15+).
+1. Fechar a documentação de distribuição Linyaps e as lacunas de evidência
+   descritas abaixo, sem reconstruir ou substituir os arquivos do Release.
+2. Se houver nova versão, adaptar primeiro a automação de publicação e
+   definir quais mudanças e ambientes precisam de novo aceite.
+3. Submissão à loja, AppImage e suporte a outras plataformas dependem de
+   escopo próprio; não fazem parte da entrega publicada.
+
+## Pendências reais do plano após o Release 1.1.0
+
+Revisão de **18/10/2026** do
+[plano de distribuição](plano-distribuicao-deepwin.md). A entrega principal
+das fases 1, 2 e 3 foi concluída: aplicação, pacotes, CI, aceite registrado e
+publicação dos três formatos com checksums. As caixas desmarcadas antigas
+de B1–B5, D1–D6 e L1/L2 não são uma lista atual de implementações ausentes.
+L1 decidiu por acesso direto ao host; construir e instalar uma ponte deixou
+de ser necessário. O diagnóstico de instalação local antiga também já existe
+no backend e na GUI, além da orientação para usar `/usr/bin/deepwin`.
+
+O balanço abaixo distingue trabalho faltante, evidência não registrada e
+manutenção posterior. Não reclassifica os testes complementares como
+bloqueios retroativos do Release aceito pelo mantenedor.
+
+| Item | Situação e próximo resultado verificável |
+| --- | --- |
+| Instruções de repositório/loja Linyaps (L2) | **Pendência documental do plano original.** O README e as notas cobrem instalar o UAB local; falta um guia próprio para distribuição por repositório/loja, distinguindo preparação, submissão e aprovação. Submeter efetivamente depende de decisão do mantenedor. |
+| Instalador gráfico do Deepin (aceite da fase 1) | **Evidência não localizada.** Os registros comprovam instalação por `apt` e `ll-cli`, abertura pelo menu e uso gráfico. Não há registro explícito da instalação pelo instalador gráfico. Executar esse fluxo em VM e registrar o resultado antes de afirmar cobertura desse critério. |
+| Reinício completo da VM e nova sessão | **Teste complementar pendente.** Confirmar serviços/helpers e estados depois do login, planejando acesso sem depender de autologin. Incluir o atalho de captura: o adendo da fase 1 registra que o daemon antigo pode voltar à combinação anterior após reiniciar a sessão. Se reproduzido, tratar a correção em nova versão. |
+| Atalhos de mover janela entre monitores | **Teste interativo complementar pendente.** A VM de aceite tinha um monitor; validar `Shift+Win+←/→` com dois monitores e registrar o resultado. Não confundir com os atalhos de workspaces já confirmados. |
+| Publicação da próxima versão | **Preparação necessária antes de outro Release.** `.github/workflows/release.yml` e `.github/scripts/publish_release.py` fixam versão 1.1.0, commit da tag, commit de código, IDs dos runs/artefatos e digests. Não são um publicador genérico. Adaptar esses dados ou parametrizar o fluxo, preservando as conferências e sem reexecutar para substituir o Release atual. |
+| Compatibilidade após atualizar Linyaps/Qt | **Manutenção condicionada à mudança de alvo.** Revalidar acesso aos diretórios XDG compartilhados ao adotar outra versão do Linyaps; revisar ABI do plugin ao mudar a major do Qt ou testar Qt anterior a 6.8. O aceite publicado é Deepin 25 amd64/X11. |
+
+AppImage, outras arquiteturas, suporte genérico a outras distribuições e
+colagem automática em Wayland não são entregas faltantes do primeiro
+Release. O portátil utiliza runtimes nativos do Deepin; torná-lo autocontido
+também exigiria outro escopo. A limitação do seletor de versões do Claude no
+sandbox Linyaps já está documentada; ampliar esse recurso é evolução futura.
 
 ## Funcionalidades anteriores ao empacotamento
 
@@ -928,3 +958,16 @@ README e plano de distribuição agora apontam para o Release disponível.
 As seções anteriores permanecem históricas; qualquer próxima correção deve
 receber nova versão, preservando a tag e os anexos desta entrega. O objetivo
 de implementação, aceite e publicação dos três formatos está concluído.
+
+## Revisão das pendências do plano — 18/10/2026
+
+A pedido do mantenedor, o ponto de partida e o plano receberam um balanço
+das pendências após o Release: guia de repositório/loja Linyaps, evidência
+de instalação pelo fluxo gráfico, testes complementares de reboot e dois
+monitores, preparação do publicador para outra versão e revalidações ao
+mudar o ambiente. Consultar o inventário atual no início deste documento.
+Os checklists históricos não foram marcados em massa; ausência de registro
+do instalador gráfico não foi tratada como teste executado. Nenhuma VM,
+build ou publicação foi iniciada nesta revisão, e não houve alteração de
+código. Validação documental por `git diff --check` e conferência de que o
+histórico anterior permaneceu intacto.

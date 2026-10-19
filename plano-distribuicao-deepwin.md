@@ -30,6 +30,29 @@ original; consulte a [passagem de desenvolvimento](continuidade-desenvolvimento.
 para o estado efetivo, os testes realizados e as pendências antes de marcar
 entregas concluídas.
 
+## Balanço após o Release 1.1.0 — 18/10/2026
+
+A entrega principal dos três formatos está concluída. As caixas antigas
+desmarcadas abaixo preservam o plano original; não representam, sozinhas,
+trabalho ainda ausente. O
+[inventário atual de pendências](continuidade-desenvolvimento.md#pendências-reais-do-plano-após-o-release-110)
+separa o que falta das etapas já executadas:
+
+- **Documentação L2:** preparar guia de distribuição por repositório/loja
+  Linyaps. Instalação local do UAB já está documentada; submissão e aprovação
+  da loja são decisões e etapas próprias.
+- **Evidência do critério gráfico:** registrar instalação pelo instalador
+  gráfico do Deepin; a evidência existente descreve `apt`/`ll-cli` e abertura
+  pelo menu.
+- **Testes complementares:** reboot/login completo, incluindo persistência
+  do atalho de captura na geração antiga do daemon, e movimentação de janelas
+  com dois monitores.
+- **Próxima versão:** adaptar a automação de publicação, hoje fixada em
+  1.1.0 e nos três artefatos aceitos. Não alterar a tag ou os anexos atuais.
+- **Mudança de ambiente:** revalidar XDG ao atualizar Linyaps e ABI ao ampliar
+  o alvo Qt. AppImage, outras arquiteturas/desktops e colagem Wayland exigem
+  escopo adicional.
+
 ## Objetivo e sequência
 
 Disponibilizar a mesma aplicação DTK, com os mesmos ajustes e backups por usuário,
