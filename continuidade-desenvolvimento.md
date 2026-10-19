@@ -6,71 +6,62 @@ o ponto de partida atual para o próximo agente.
 
 ## Ponto de partida para o próximo agente
 
-Atualizado em **18/10/2026**, após revisar as pendências do plano com o
-Release 1.1.0 publicado e conferido.
+Atualizado em **19/10/2026**, após retomada interrompida a pedido do
+mantenedor (ver adendo no fim deste documento para o detalhe completo).
 
 - Repositório: <https://github.com/eduardodaluz/deepWin>, branch `main`.
-  Consulte `git log -1` para o commit atual. **Nenhum commit contém linha de
-  coautoria do Claude**: o mantenedor pediu a remoção (seis commits
-  reescritos com árvores idênticas e force push com lease) e commits novos
-  devem sair sem o trailer.
-- O mantenedor **autorizou explicitamente o push à `main`** após a rejeição
-  automática inicial. Código validado nos três workflows: `07fb017`.
-  **CI Debian, Linyaps e portátil verdes**, com artefatos publicados nos runs
-  [39179478622](https://github.com/eduardodaluz/deepWin/actions/runs/39179478622),
-  [39179478573](https://github.com/eduardodaluz/deepWin/actions/runs/39179478573)
-  e [39179478620](https://github.com/eduardodaluz/deepWin/actions/runs/39179478620).
-- **Fase 1 (.deb): concluída e publicada no Release.** Arquivo
-  `devedu.deepin-configs_1.1.0-3_amd64.deb`; CI e aceite em VM completos.
-- **Fase 2 (Linyaps `.uab`): concluída, aceita em VM e publicada.** Arquivo
-  `devedu.deepin-configs_1.1.0.0_x86_64_main.uab`, sha256
-  `44a8c1ba5aebb08c95b5c67c69cb113c309530ffad2522b15c4db9f426d4dbe9`.
-  O Release usa o artefato da CI no código `07fb017`, com runtime 25.2.2 e
-  fixes de `XDG_DATA_DIRS`. Os hashes diferentes nos adendos pertencem a
-  candidatos anteriores; não usar como checksum do arquivo publicado.
-- **CI da fase 2 concluída.** O pull no runner passou após o espelhamento;
-  a CI revelou mais duas diferenças em relação ao host de desenvolvimento
-  (namespaces e UID do staging), corrigidas e validadas localmente e no
-  runner limpo. Build, smoke tests, exportação e upload passaram.
-  **Implementado nesta retomada:**
-  override `DEEPWIN_BUILDER_IMAGE`, origem fixada por digest, pull separado
-  com três tentativas limitadas e logs anexados mesmo em falha. A variável
-  de repositório `DEEPWIN_BUILDER_IMAGE` permite trocar a origem.
-  **Espelho publicado após o login do mantenedor:**
-  `ghcr.io/eduardodaluz/linyaps-builder@sha256:9170f635112d5068ef815d6e55d6bd3969e668151bd31a33ca48086f53fd372a`.
-  O workflow usa esse digest como padrão. **A imagem é pública e o pull
-  anônimo pelo digest passou**, usando configuração Docker temporária vazia.
-  Procedimento em [packaging/linyaps-builder.md](packaging/linyaps-builder.md).
-- **Fase 3 (portátil `.tar.xz`): concluída, aceita em imagem limpa, snapshot
-  de VM com sessão gráfica e [CI](https://github.com/eduardodaluz/deepWin/actions/runs/39179478620), publicada no Release.** Arquivo
-  `DeepWin-1.1.0-amd64-portable.tar.xz`, SHA-256
-  `feb141dd8c925899ec5f235fc84aed203ce6dadbf6a9f7b49ee6dc3ef000cbbc`.
-  Reutiliza o staging CMake e os runtimes nativos Qt/DTK/Python do Deepin 25;
-  não é autocontido. A aplicação abre por `./deepwin`; menu opcional por
-  `./register-menu` e `./unregister-menu`, preservando personalizações.
-  Build, verificação limpa, menu seguro, movimentação/remoção, restauração
-  real e rollback entre versões foram testados; consultar o último adendo.
-- **Primeiro Release publicado e conferido**, após autorização do mantenedor:
-  [DeepWin 1.1.0](https://github.com/eduardodaluz/deepWin/releases/tag/v1.1.0),
-  com `.deb`, `.uab`, `.tar.xz`, três sidecars e `SHA256SUMS`.
-  [Publicação aprovada](https://github.com/eduardodaluz/deepWin/actions/runs/39181338129)
-  às 21h34 de 18/10/2026 (UTC-3). Tag `v1.1.0` preservada em `66d0b5c`;
-  código dos instaladores: `07fb017`. A diferença é documentação e automação.
-  A publicação usa somente o token da própria execução do Actions.
-  **Não recriar a tag nem substituir anexos:** próximas correções devem
-  passar por nova versão. Notas em [packaging](packaging/release-notes-1.1.0.md).
-- Ambiente preservado: VM de aceite **desligada** em `~/deepwin-vm/`
-  (quando no ar, SSH porta 2222, usuário `deepwin` com sudo NOPASSWD;
-  para tocar a sessão gráfica por SSH, exportar `DISPLAY=:0`,
-  `XDG_SESSION_TYPE=x11`, `XDG_RUNTIME_DIR=/run/user/1000` e
-  `DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus`; grab do teclado
-  no QEMU é Ctrl+Alt+G). Volume Docker `ll-builder-cache` (~2 GB com Base e
-  Runtime develop) mantém os builds `--offline` rápidos. Em `/tmp` da VM há
-  um backup do stub de unidade removido (`/tmp/stub-backup/`), descartável.
+  **Mudanças desta retomada estão LOCAIS e NÃO COMMITADAS** (inventário no
+  adendo); 144 testes Python OK; sem push e sem execução de CI nesta
+  passagem. Nenhum commit contém linha de coautoria do Claude.
+- **Publicador de Release parametrizado** (completo e testado): definição
+  por JSON em `.github/releases/` (`v1.1.0.json` registra o release já
+  publicado; `README.md` traz o roteiro da próxima versão e os critérios de
+  revalidação). `release.yml` publica só por `workflow_dispatch` com o nome
+  da definição; pushes que tocam a automação executam apenas testes; release
+  já publicado é no-op. A próxima versão não exige editar código: criar
+  `<tag>.json`, marcar a tag e despachar o workflow.
+- **Guia de repositório/loja Linyaps (L2) escrito**:
+  [packaging/linyaps-store-guide.md](packaging/linyaps-store-guide.md).
+  **Achado crítico**: `devedu.deepin-configs` não satisfaz a spec de
+  domínio reverso comprovado exigida para submissão a repositório/loja
+  (para terceiros a spec pede `io.github.<usuário>.<app>`); a distribuição
+  direta de `.uab` não é afetada. Adotar novo ID ou buscar exceção é
+  decisão do mantenedor e precede qualquer submissão.
+- **Evidência do instalador gráfico registrada** (lacuna da fase 1): fluxo
+  completo do `deepin-deb-installer` na VM com o `.deb` do Release,
+  terminando em `dpkg ii` 1.1.0-3 sem criar estado. Detalhes e
+  screenshots no adendo.
+- **Reinício completo da VM executado**: serviços, estados e backups
+  preservados após reboot com nova sessão (autologin do lightdm
+  configurado e mantido — `/etc/lightdm/lightdm.conf.d/50-deepwin-autologin.conf`).
+  **Atenção**: a senha do usuário `deepwin` da VM ficou vazia (NP) por
+  perda do backup de hash em `/tmp` (tmpfs); o mantenedor deve restaurar a
+  sua com `sudo passwd deepwin` na VM.
+- **Regressão do atalho de captura reproduzida e diagnósticada**: o daemon
+  antigo une a combinação padrão às adições gravadas no dconf a cada login
+  (`['<Control><Alt>A', '<Shift><Super>S']`); não há remoção persistente.
+  Correção parcial no backend (dsettings grava a lista escolhida) já no
+  código, com testes; **comprovada necessária e insuficiente**. Correção
+  definitiva (unidade por login no padrão do clipboard) está desenhada no
+  adendo, sem implementação — o esboço iniciado foi revertido para não
+  deixar o repositório inconsistente na interrupção.
+- **Atalhos entre monitores**: teste ainda pendente; launcher preparado em
+  `~/deepwin-vm/start-vm-dual.sh` (virtio-gpu com duas saídas, headless) e
+  procedimento de snapshot descrito no adendo.
+- VM de aceite **desligada** em `~/deepwin-vm/` (SSH porta 2222 quando no
+  ar; usuário `deepwin`, sudo NOPASSWD, **senha atualmente vazia — NP**;
+  launchers: `start-vm.sh` com janela e `start-vm-headless.sh`). Para tocar
+  a sessão gráfica por SSH, exportar `DISPLAY=:0`,
+  `XDG_SESSION_TYPE=x11`, `XDG_RUNTIME_DIR=/run/user/1000`,
+  `DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus` e
+  `XAUTHORITY=/home/deepwin/.Xauthority` (para clientes X como xdotool e
+  `ffmpeg -f x11grab`); grab do teclado no QEMU é Ctrl+Alt+G. Estado XDG do
+  usuário na VM preservado (9/10 recursos ativos, 9 backups em
+  `~/.local/state/devedu.deepin-configs`). Volume Docker `ll-builder-cache`
+  (~2 GB) mantém os builds `--offline` rápidos.
 - Monitores de CI sem autenticação: a API pública rate-limita a 60 req/h —
-  pollar a cada 5-8 minutos. Logs de run exigem auth; o workflow do UAB já
-  publica a cauda do `build.log` como anotação de erro, legível sem auth em
-  `check-runs/{id}/annotations`.
+  pollar a cada 5-8 minutos. Logs de run exigem auth; os workflows do UAB e
+  do publicador emitem a cauda do log como anotação de erro legível sem auth.
 
 Restrições permanentes: licença MIT; e-mail `eduardo.r.luz@gmail.com` é
 público por escolha expressa; ordem dos formatos `.deb` → Linyaps →
@@ -104,11 +95,12 @@ bloqueios retroativos do Release aceito pelo mantenedor.
 
 | Item | Situação e próximo resultado verificável |
 | --- | --- |
-| Instruções de repositório/loja Linyaps (L2) | **Pendência documental do plano original.** O README e as notas cobrem instalar o UAB local; falta um guia próprio para distribuição por repositório/loja, distinguindo preparação, submissão e aprovação. Submeter efetivamente depende de decisão do mantenedor. |
-| Instalador gráfico do Deepin (aceite da fase 1) | **Evidência não localizada.** Os registros comprovam instalação por `apt` e `ll-cli`, abertura pelo menu e uso gráfico. Não há registro explícito da instalação pelo instalador gráfico. Executar esse fluxo em VM e registrar o resultado antes de afirmar cobertura desse critério. |
-| Reinício completo da VM e nova sessão | **Teste complementar pendente.** Confirmar serviços/helpers e estados depois do login, planejando acesso sem depender de autologin. Incluir o atalho de captura: o adendo da fase 1 registra que o daemon antigo pode voltar à combinação anterior após reiniciar a sessão. Se reproduzido, tratar a correção em nova versão. |
-| Atalhos de mover janela entre monitores | **Teste interativo complementar pendente.** A VM de aceite tinha um monitor; validar `Shift+Win+←/→` com dois monitores e registrar o resultado. Não confundir com os atalhos de workspaces já confirmados. |
-| Publicação da próxima versão | **Preparação necessária antes de outro Release.** `.github/workflows/release.yml` e `.github/scripts/publish_release.py` fixam versão 1.1.0, commit da tag, commit de código, IDs dos runs/artefatos e digests. Não são um publicador genérico. Adaptar esses dados ou parametrizar o fluxo, preservando as conferências e sem reexecutar para substituir o Release atual. |
+| Instruções de repositório/loja Linyaps (L2) | **Guia escrito nesta retomada** ([packaging/linyaps-store-guide.md](packaging/linyaps-store-guide.md)): dois canais (Repository-Manager e loja UnionTech), CLA, aprovação e requisitos. Pendência de decisão: o ID `devedu.deepin-configs` não atende à spec de domínio reverso comprovado; submeter exige resolver o identificador. |
+| Instalador gráfico do Deepin (aceite da fase 1) | **Evidência registrada nesta retomada.** Fluxo completo do instalador gráfico executado na VM com o `.deb` do Release e conferido até `dpkg ii`, sem criar estado. Detalhe operacional: o diálogo de polkit não aparece na sessão de autologin; usar regra temporária (removida após o teste). |
+| Reinício completo da VM e nova sessão | **Executado nesta retomada.** Serviços (clipboard ativo do runtime persistente), backups (9), flag da calculadora e ausência do timer de wallpaper confirmados após reboot com nova sessão. O atalho de captura regrediu como o adendo da fase 1 antecipava — ver linha seguinte. |
+| Regressão do atalho de captura (daemon antigo) | **Reproduzida com detalhe novo:** após o login o daemon une o padrão `<Control><Alt>A` à combinação do painel. Correção parcial no backend (dsettings grava a lista escolhida) está no código com testes; a prova na VM mostrou que **não basta** — o dsettings é aditivo. Correção definitiva desenhada (unidade por login), sem implementação. |
+| Atalhos de mover janela entre monitores | **Teste interativo complementar pendente.** Launcher de dois monitores preparado (`~/deepwin-vm/start-vm-dual.sh`) com procedimento de snapshot no adendo; validar `Shift+Win+←/→` e registrar o resultado. |
+| Publicação da próxima versão | **Automação parametrizada nesta retomada** (`.github/releases/` + `release.yml` por dispatch). A próxima versão exige apenas a definição JSON nova, tag e dispatch — sem editar código do publicador. |
 | Compatibilidade após atualizar Linyaps/Qt | **Manutenção condicionada à mudança de alvo.** Revalidar acesso aos diretórios XDG compartilhados ao adotar outra versão do Linyaps; revisar ABI do plugin ao mudar a major do Qt ou testar Qt anterior a 6.8. O aceite publicado é Deepin 25 amd64/X11. |
 
 AppImage, outras arquiteturas, suporte genérico a outras distribuições e
@@ -971,3 +963,163 @@ do instalador gráfico não foi tratada como teste executado. Nenhuma VM,
 build ou publicação foi iniciada nesta revisão, e não houve alteração de
 código. Validação documental por `git diff --check` e conferência de que o
 histórico anterior permaneceu intacto.
+
+## Retomada de 19/10/2026 — pendências pós-Release, interrompida a pedido
+
+Escopo desta passagem: fechar a documentação L2, parametrizar a publicação,
+coletar as evidências faltantes de VM e tratar a regressão do atalho de
+captura. O mantenedor pediu documentação e parada no meio do caminho; o que
+estava pela metade foi revertido para deixar o repositório verde (144
+testes). **Nada disto está commitado nem enviado** — inventário no fim.
+
+### Publicador de Release parametrizado (completo)
+
+- `.github/scripts/publish_release.py` lê uma definição JSON de
+  `.github/releases/` (`--config`), com validação de schema (chaves
+  exatas, commits 40-hex, digests 64-hex, caminhos sem escape do diretório)
+  e as conferências anteriores preservadas (proveniência de run/artefato,
+  digest dos ZIPs, checksum do instalador, rascunho retomado por ID,
+  conferência dos anexos remotos antes de publicar). Um release já
+  publicado é **no-op de sucesso**; a publicação só corre por
+  `workflow_dispatch` na `main`.
+- `.github/workflows/release.yml`: disparo manual com o nome da definição;
+  pushes que tocam a automação executam só os testes; o gatilho da tag
+  `v1.1.0` foi removido — o release publicado nunca é reexecutado.
+- `.github/releases/v1.1.0.json` registra exatamente o release publicado
+  (runs, artefatos, digests dos ZIPs, commits) e
+  `.github/releases/README.md` documenta o roteiro da próxima versão e
+  quando cada mudança exige novo aceite.
+- 14 testes do publicador, incluindo o parse da definição commitada, guarda
+  de caminho e a semântica de no-op. Suíte completa: 144.
+
+### Guia de repositório/loja Linyaps (completo)
+
+`packaging/linyaps-store-guide.md` cobre os dois canais (comunidade via
+`linglongdev/Repository-Manager` com PR e CI de Jenkins; loja UnionTech/deepin
+com upload de `.layer` no console), CLA, requisitos do manifesto, ícone 48px
+mínimo, ativos de vitrine, revisão humana dos dois lados e a ausência
+documentada de assinatura. Fontes verificadas em outubro de 2026 citadas no
+fim do guia.
+
+**Achado crítico para decisão do mantenedor:** a spec exige `package.id`
+em domínio reverso comprovado; `devedu` não é domínio do mantenedor e para
+terceiros a spec recomenda `io.github.<usuário>.<app>`. A loja pode remover
+apps sem domínio comprovável. Distribuição direta de `.uab` (canal do
+Release) não é afetada. Mudar o ID é intervenção profunda (estado XDG,
+desktop entry, nomes de pacote) e depende de migração planejada.
+
+### Evidência do instalador gráfico (lacuna da fase 1 — registrada)
+
+Fluxo completo na VM de aceite: `deepin-deb-installer` 6.5.46, pacote
+`devedu.deepin-configs_1.1.0-3_amd64.deb` baixado do Release público
+(sha256 conferido contra o sidecar), aberto pelo diálogo "Selecionar
+arquivo", botão "Instalar", progresso e tela final "Instalado". Pós-condições
+conferidas: `dpkg ii` 1.1.0-3, `deepwin --version` = `DeepWin 1.1.0`, desktop
+entry presente, nenhum estado criado pela instalação (`~/.config`
+intocado; estado preexistente em `~/.local/share` e `~/.local/state`
+preservado).
+
+Notas operacionais desta coleta:
+
+- O `.deb` da linha de comando não é carregado automaticamente pelo
+  instalador; carregar pelo botão "Selecionar arquivo" funciona.
+- O diálogo de polkit não aparece na sessão de autologin (transação do
+  qaptworker fica à espera e é cancelada). Para o teste, uma regra temporária
+  em `/etc/polkit-1/rules.d/50-deepwin-test-install.rules` autorizou as
+  ações `org.kubuntu.qapt6worker3.*` e `com.deepin.pkexec.aptInstallDepend`
+  para o usuário `deepwin` — **removida após o teste**.
+- O `/usr/bin/deepwin` é o launcher da GUI (`deepwin-ui`): `deepwin status`
+  abre o painel e prende o terminal — o CLI vive em
+  `gui/backend.py` (ex.: `--smoke-test --check-integrations`).
+- Screenshots da sessão: `/tmp/deepwin-vm-installer-{open,step4,step5,
+  step9,step10,step12,final}.png` no host (fora do repositório, descartáveis).
+
+### Reinício completo da VM (executado)
+
+Autologin do lightdm configurado (`/etc/lightdm/lightdm.conf.d/
+50-deepwin-autologin.conf`, sessão `deepin`) porque a VM reiniciada para no
+greeter e a senha de login não estava registrada; o SSH independe disso.
+Após o reboot, com nova sessão: `deepin-clipboard-autopaste` enabled/active
+executando do runtime persistente, timer de wallpaper segue ausente
+(estado restaurado), flag da calculadora intacta (owner/format/sha256),
+9 backups intactos em `~/.local/state/devedu.deepin-configs`. **PASS.**
+
+### Regressão do atalho de captura (reproduzida e diagnósticada)
+
+Estado observado após o login: `GetShortcut('screenshot')` retorna
+`['<Control><Alt>A', '<Shift><Super>S']` — padrão **e** combinação do painel
+ativas juntas (o adendo da fase 1 previa "voltar à combinação anterior"; o
+observado é a união).
+
+Diagnóstico com experimentos na VM:
+
+- `gsettings get com.deepin.dde.keybinding.system screenshot` reflete o
+  runtime; gravar só a lista desejada (`['<Shift><Super>S']`) e reiniciar a
+  sessão **não** remove o padrão — o daemon uni o default embutido ao
+  dconf (semântica aditiva).
+- `~/.config/deepin/dde-daemon/keybinding/custom.ini` só registra atalhos
+  customizados (UOS AI); não há registro de modificação de built-ins.
+- A interface não expõe remoção persistente: `ModifiedAccel` é runtime;
+  `EnableSystemShortcut(..., isPersistent)` desabilita, não reescreve.
+
+Correção parcial implementada (no código, testada): `set_screenshot` grava
+no dsettings a lista **escolhida** (`value['active']`) em vez do valor
+anterior (`value['saved']`), atualizando `value['saved']` antes da
+re-checagem. Dois testes de regressão novos (144 no total). **Comprovada
+necessária e insuficiente** pelo experimento acima.
+
+Correção definitiva desenhada (não implementada; o esboço iniciado foi
+revertido na interrupção): unidade de usuário oneshot por sessão, no padrão
+do clipboard — `deepin-shortcut-reapply.service` (template em
+`packaging/systemd/`, `WantedBy=dde-session-initialized.target`,
+`ExecCondition` x11) executando helper `bin/deepin-shortcut-reapply`
+(stdlib + `bootstrap_runtime_python`), que lê o dsettings, detecta a
+geração (na nova sai sem fazer nada) e converge o runtime via
+`ModifiedAccel` com re-checagem; `SERVICE_FILES['screenshot']`,
+substituição `@SHORTCUT_EXEC@` no `user_services.prepare`, cabeamento em
+`capture` (snapshot `files`/`absent` do recurso), `apply` (prepara/habilita
+a unidade só na geração antiga) e `restore_value` (restaura/remove a
+unidade com as mesmas proteções de personalização dos serviços). Um teste
+de convergência com API falsa completa o conjunto. Especificação
+detalhada neste adendo; implementação estimada em meia sessão + aceite em
+VM (rebuild do `.deb`, ativação, reboot, conferir `['<Shift><Super>S']`).
+
+### Dois monitores (não executado; preparado)
+
+`~/deepwin-vm/start-vm-dual.sh` (fora do repositório) sobe a VM com
+`virtio-gpu-pci,max_outputs=2`, headless. Procedimento previsto: desligar,
+`qemu-img snapshot -c pre-dualhead deepwin-acceptance.qcow2`, subir,
+confirmar duas saídas no `xrandr` do convidado, posicionar janela,
+`Shift+Win+←/→` via xdotool e verificar a geometria cruzando os monitores,
+capturar cada saída com `ffmpeg -f x11grab -video_size WxH -i :0.0+X,Y`,
+desligar e `qemu-img snapshot -a pre-dualhead` para restaurar. Risco
+registrado: sem vgabios o GRUB fica invisível no boot por BIOS (o sistema
+sobe por KMS); se o X não subir, reverter ao snapshot.
+
+### Estado da VM e limpeza
+
+- VM **desligada**; estado XDG preservado (9/10 ativos, 9 backups).
+- Autologin **mantido** (necessário para os testes; para reverter, apagar
+  `/etc/lightdm/lightdm.conf.d/50-deepwin-autologin.conf` na VM).
+- **Senha do usuário `deepwin` vazia (NP)**: o backup do hash estava em
+  `/tmp` da VM (tmpfs) e foi perdido no segundo reboot; o `usermod` de
+  restauração recebeu arquivo inexistente e zerou a senha. O mantenedor
+  conhece a senha original — restaurar com `sudo passwd deepwin` na VM.
+- Regra de polkit temporária removida; `.deb` e capturas temporárias
+  removidos do convidado.
+
+### Inventário local não commitado
+
+```
+ M .github/scripts/publish_release.py      (publicador parametrizado)
+ M .github/scripts/test_publish_release.py (testes novos: schema, guard, no-op)
+ M .github/workflows/release.yml           (dispatch + testes-only no push)
+ M gui/backend.py                          (dsettings grava lista escolhida)
+ M tests/test_packaged_resources.py        (2 regressões do dsettings)
+ ?? .github/releases/                      (v1.1.0.json + README.md)
+ ?? packaging/linyaps-store-guide.md       (guia L2)
+```
+
+`git diff --check` limpo; suíte 144 testes OK; publicador 14 testes OK.
+Sem commit, sem push, sem CI nesta passagem. Host: `start-vm-headless.sh`
+e `start-vm-dual.sh` criados em `~/deepwin-vm/` (fora do repositório).
