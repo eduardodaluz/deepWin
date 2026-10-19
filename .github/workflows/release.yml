@@ -1,16 +1,22 @@
-name: Publish Release 1.1.0
+name: Publish Release
 on:
+  workflow_dispatch:
+    inputs:
+      config:
+        description: 'Release definition under .github/releases/ (e.g. v1.1.0.json)'
+        required: true
+        type: string
   push:
-    tags: [v1.1.0]
     branches: [main]
     paths:
       - .github/workflows/release.yml
       - .github/scripts/publish_release.py
       - .github/scripts/test_publish_release.py
+      - .github/releases/**
 permissions:
   contents: read
 concurrency:
-  group: release-1.1.0
+  group: release-${{ inputs.config || 'tooling-tests' }}
   cancel-in-progress: false
 jobs:
   publish:
@@ -27,12 +33,14 @@ jobs:
       - name: Test release validation
         run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
       - name: Validate approved artifacts, upload draft and publish
+        if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_CONFIG: ${{ inputs.config }}
         shell: bash
         run: |
           set -o pipefail
-          python3 .github/scripts/publish_release.py 2>&1 | tee release.log
+          python3 .github/scripts/publish_release.py --config "$RELEASE_CONFIG" 2>&1 | tee release.log
       - name: Report failure tail
         if: failure()
         shell: bash

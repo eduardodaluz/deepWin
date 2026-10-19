@@ -1,35 +1,27 @@
-"""Publish only the three accepted 1.1.0 artifacts; never rebuild or replace them."""
+"""Publish only the accepted artifacts recorded in a release definition.
+
+Each release is described by a JSON file under .github/releases/ recording the
+accepted source commit, tag commit, CI run and artifact IDs and ZIP digests.
+Publication never rebuilds or replaces an already published release.
+"""
+import argparse
 import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
 import zipfile
 
 REPOSITORY = 'eduardodaluz/deepWin'
-TAG = 'v1.1.0'
-TAG_COMMIT = '66d0b5c857f13db8bf6cb86f552d2ac76ec806d3'
-SOURCE = '07fb017ab558f54b7282821d7ca305e8289f4b66'
-# IDs and ZIP digests recorded from the successful runs before publication.
-BUILDS = (
-    dict(run=39179478622, workflow='deb.yml', artifact=12155199625,
-         name='deepwin-deb-amd64', file='devedu.deepin-configs_1.1.0-3_amd64.deb',
-         digest='6d62711083bd2d9efcd74eabcef5499e4aa089cfdf4d0cdf862940951bfbc78d'),
-    dict(run=39179478573, workflow='uab.yml', artifact=12155493804,
-         name='deepwin-uab-amd64', file='devedu.deepin-configs_1.1.0.0_x86_64_main.uab',
-         digest='324b0680d2223eb36c92ad5e35ef4e60b3b9a0d365cf20a57c0e26e3b1d86850'),
-    dict(run=39179478620, workflow='portable.yml', artifact=12155179755,
-         name='deepwin-portable-amd64', file='DeepWin-1.1.0-amd64-portable.tar.xz',
-         digest='69282fd9a1e42184416d9de12852ff0a8dd04b59d278f584c701de98bba1a530'),
-)
-# The release tag adds documentation and publication tooling to the accepted code.
-RELEASE_ONLY = {
-    'README.md', 'continuidade-desenvolvimento.md', 'plano-distribuicao-deepwin.md',
-    'packaging/release-notes-1.1.0.md', '.github/workflows/release.yml',
-    '.github/scripts/publish_release.py', '.github/scripts/test_publish_release.py',
-}
+CONFIG_DIR = Path('.github/releases')
+HEX40 = re.compile(r'[0-9a-f]{40}\Z')
+HEX64 = re.compile(r'[0-9a-f]{64}\Z')
+CONFIG_KEYS = {'tag', 'title', 'version', 'tag_commit', 'source', 'notes',
+               'release_only', 'builds'}
+BUILD_KEYS = {'run', 'workflow', 'artifact', 'name', 'file', 'digest'}
 
 
 def require(condition, message):
@@ -53,8 +45,52 @@ def sha256(path):
     return digest.hexdigest()
 
 
-def validate_run(build, run, artifact):
-    require(run['id'] == build['run'] and run['head_sha'] == SOURCE
+def resolve_config(argument):
+    """Accept only release definitions stored under .github/releases/."""
+    path = Path(argument)
+    require(path.parent == CONFIG_DIR and path.suffix == '.json'
+            and '..' not in path.parts,
+            f'Release definition must be a JSON file under {CONFIG_DIR}/: {argument}')
+    require(path.is_file(), f'Release definition not found: {argument}')
+    return path
+
+
+def load_config(path):
+    """Load and validate the release definition schema."""
+    data = json.loads(Path(path).read_text())
+    require(isinstance(data, dict), 'Release definition must be a JSON object')
+    require(set(data) == CONFIG_KEYS,
+            f'Release definition keys differ from the expected schema: {sorted(data)}')
+    require(re.match(r'v\d+\.\d+\.\d+', str(data['tag'])), 'Unexpected tag format')
+    require(isinstance(data['title'], str) and data['title'].strip(),
+            'Release title must be a non-empty string')
+    require(isinstance(data['version'], str) and data['version'].strip(),
+            'Release version must be a non-empty string')
+    for key in ('tag_commit', 'source'):
+        require(HEX40.fullmatch(str(data[key])), f'{key} must be a 40-hex commit')
+    require(Path(data['notes']).is_file(), f'Release notes file missing: {data["notes"]}')
+    require(isinstance(data['release_only'], list) and data['release_only']
+            and all(isinstance(item, str) and item for item in data['release_only']),
+            'release_only must be a non-empty list of paths')
+    require(isinstance(data['builds'], list) and data['builds'], 'builds must be non-empty')
+    for build in data['builds']:
+        require(set(build) == BUILD_KEYS, f'Build entry keys differ: {sorted(build)}')
+        require(isinstance(build['run'], int) and build['run'] > 0
+                and isinstance(build['artifact'], int) and build['artifact'] > 0,
+                f'Run and artifact IDs must be positive integers: {build.get("file")}')
+        require(isinstance(build['workflow'], str) and build['workflow'].endswith('.yml')
+                and Path(build['workflow']).name == build['workflow'],
+                f'Workflow path must be a bare file name: {build.get("workflow")}')
+        require(isinstance(build['name'], str) and build['name']
+                and isinstance(build['file'], str) and Path(build['file']).name == build['file'],
+                f'Artifact and file names must be bare names: {build.get("name")}')
+        require(HEX64.fullmatch(str(build['digest'])),
+                f'Artifact digest must be a 64-hex SHA-256: {build.get("file")}')
+    return data
+
+
+def validate_run(build, run, artifact, source):
+    require(run['id'] == build['run'] and run['head_sha'] == source
             and run['head_branch'] == 'main' and run['event'] == 'push'
             and run['status'] == 'completed' and run['conclusion'] == 'success'
             and run['path'] == f'.github/workflows/{build["workflow"]}'
@@ -63,7 +99,7 @@ def validate_run(build, run, artifact):
     require(artifact['id'] == build['artifact'] and artifact['name'] == build['name']
             and not artifact['expired']
             and artifact['workflow_run']['id'] == build['run']
-            and artifact['workflow_run']['head_sha'] == SOURCE
+            and artifact['workflow_run']['head_sha'] == source
             and artifact['digest'] == f'sha256:{build["digest"]}',
             f'Unapproved artifact: {build["artifact"]}')
 
@@ -88,8 +124,8 @@ def prepare_asset(build, archive, output):
     return expected
 
 
-def validate_uploaded(release, assets, draft=True):
-    require(release['tag_name'] == TAG and release['draft'] == draft
+def validate_uploaded(release, assets, tag, draft=True):
+    require(release['tag_name'] == tag and release['draft'] == draft
             and not release['prerelease'], 'Release is not the expected draft')
     uploaded = release['assets']
     require(len(uploaded) == len(assets)
@@ -102,46 +138,68 @@ def validate_uploaded(release, assets, draft=True):
                 f'Uploaded asset verification failed: {item["name"]}')
 
 
-def find_release():
+def find_release(tag):
     # The tag endpoint omits drafts; listing includes them for this repository token.
     pages = json.loads(command('gh', 'api', '--paginate', '--slurp',
                               f'repos/{REPOSITORY}/releases?per_page=100'))
-    matches = [item for page in pages for item in page if item['tag_name'] == TAG]
+    matches = [item for page in pages for item in page if item['tag_name'] == tag]
     require(len(matches) <= 1, 'Multiple releases use the expected tag')
     return matches[0] if matches else None
 
 
-def validate_draft(release, notes):
+def validate_draft(release, notes, title, tag):
     require(release['draft'] and not release['prerelease']
-            and release['tag_name'] == TAG and release['name'] == 'DeepWin 1.1.0'
+            and release['tag_name'] == tag and release['name'] == title
             and release['body'].strip() == notes.strip(),
             'Existing release is not the expected unpublished draft')
 
 
+def already_published(release, tag):
+    return (bool(release) and not release['draft'] and not release['prerelease']
+            and release['tag_name'] == tag and bool(release['published_at']))
+
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument('--config', required=True, help='Release definition under .github/releases/')
+    args = parser.parse_args()
+    config = load_config(resolve_config(args.config))
+    tag, source = config['tag'], config['source']
     require(os.environ.get('GITHUB_REPOSITORY') == REPOSITORY
-            and os.environ.get('GITHUB_REF') in (f'refs/tags/{TAG}', 'refs/heads/main')
-            and os.environ.get('GITHUB_EVENT_NAME') == 'push', 'Unexpected release trigger')
-    require(Path('VERSION').read_text().strip() == '1.1.0', 'Version mismatch')
-    require(command('git', 'rev-parse', f'{TAG}^{{commit}}') == TAG_COMMIT,
+            and os.environ.get('GITHUB_REF') == 'refs/heads/main'
+            and os.environ.get('GITHUB_EVENT_NAME') == 'workflow_dispatch',
+            'Publication runs only from a manual dispatch on main')
+    require(Path('VERSION').read_text().strip() == config['version'], 'Version mismatch')
+
+    existing = find_release(tag)
+    if already_published(existing, tag):
+        # Publication already happened; never rebuild, edit or replace it.
+        summary = {'status': 'already-published', 'tag': tag,
+                   'url': existing['html_url'], 'build_source': source}
+        Path('release-summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+        print(json.dumps(summary, indent=2), flush=True)
+        return
+
+    require(command('git', 'rev-parse', f'{tag}^{{commit}}') == config['tag_commit'],
             'Release tag changed after authorization')
-    subprocess.run(['git', 'merge-base', '--is-ancestor', TAG_COMMIT, 'HEAD'], check=True)
-    subprocess.run(['git', 'merge-base', '--is-ancestor', SOURCE, TAG_COMMIT], check=True)
-    changed = set(command('git', 'diff', '--name-only', SOURCE, 'HEAD').splitlines())
-    require(changed <= RELEASE_ONLY, f'Application changed after acceptance: {changed - RELEASE_ONLY}')
-    notes = Path('packaging/release-notes-1.1.0.md').read_text()
-    existing = find_release()
+    subprocess.run(['git', 'merge-base', '--is-ancestor', config['tag_commit'], 'HEAD'], check=True)
+    subprocess.run(['git', 'merge-base', '--is-ancestor', source, config['tag_commit']], check=True)
+    changed = set(command('git', 'diff', '--name-only', source, 'HEAD').splitlines())
+    allowlist = set(config['release_only'])
+    require(changed <= allowlist,
+            f'Application changed after acceptance: {changed - allowlist}')
+    notes = Path(config['notes']).read_text()
     if existing:
-        validate_draft(existing, notes)
+        validate_draft(existing, notes, config['title'], tag)
 
     with tempfile.TemporaryDirectory(prefix='deepwin-release-') as temporary:
         directory = Path(temporary)
         output = directory / 'assets'
         output.mkdir()
         checksums = []
-        for build in BUILDS:
+        for build in config['builds']:
             validate_run(build, api(f'actions/runs/{build["run"]}'),
-                         api(f'actions/artifacts/{build["artifact"]}'))
+                         api(f'actions/artifacts/{build["artifact"]}'), source)
             archive = directory / f'{build["artifact"]}.zip'
             with archive.open('xb') as stream:
                 subprocess.run(['gh', 'api',
@@ -152,24 +210,24 @@ def main():
         (output / 'SHA256SUMS').write_text(''.join(checksums))
         assets = {path.name: path for path in output.iterdir()}
         if not existing:
-            subprocess.run(['gh', 'release', 'create', TAG, '--repo', REPOSITORY,
-                            '--verify-tag', '--draft', '--title', 'DeepWin 1.1.0',
-                            '--notes-file', 'packaging/release-notes-1.1.0.md',
+            subprocess.run(['gh', 'release', 'create', tag, '--repo', REPOSITORY,
+                            '--verify-tag', '--draft', '--title', config['title'],
+                            '--notes-file', config['notes'],
                             *map(str, sorted(assets.values()))], check=True)
-            existing = find_release()
+            existing = find_release(tag)
             require(existing is not None, 'Created draft not found')
         release = api(f'releases/{existing["id"]}')
-        validate_draft(release, notes)
-        validate_uploaded(release, assets)
-        # Publication is the final mutation, after checking all seven remote digests.
+        validate_draft(release, notes, config['title'], tag)
+        validate_uploaded(release, assets, tag)
+        # Publication is the final mutation, after checking all remote digests.
         subprocess.run(['gh', 'api', '--method', 'PATCH',
                         f'repos/{REPOSITORY}/releases/{release["id"]}',
                         '-F', 'draft=false', '-f', 'make_latest=true'],
                        stdout=subprocess.DEVNULL, check=True)
         published = api(f'releases/{release["id"]}')
-        validate_uploaded(published, assets, draft=False)
+        validate_uploaded(published, assets, tag, draft=False)
         require(not published['draft'] and published['published_at'], 'Release was not published')
-        summary = {'url': published['html_url'], 'tag': TAG, 'build_source': SOURCE,
+        summary = {'url': published['html_url'], 'tag': tag, 'build_source': source,
                    'assets': {name: sha256(path) for name, path in sorted(assets.items())}}
         Path('release-summary.json').write_text(json.dumps(summary, indent=2) + '\n')
         print(json.dumps(summary, indent=2), flush=True)
