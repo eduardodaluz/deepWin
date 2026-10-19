@@ -25,7 +25,7 @@ BUILDS = (
 )
 # The release tag adds documentation and publication tooling to the accepted code.
 RELEASE_ONLY = {
-    'README.md', 'continuidade-desenvolvimento.md',
+    'README.md', 'continuidade-desenvolvimento.md', 'plano-distribuicao-deepwin.md',
     'packaging/release-notes-1.1.0.md', '.github/workflows/release.yml',
     '.github/scripts/publish_release.py', '.github/scripts/test_publish_release.py',
 }
