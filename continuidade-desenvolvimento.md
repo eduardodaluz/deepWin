@@ -6,7 +6,7 @@ o ponto de partida atual para o próximo agente.
 
 ## Ponto de partida para o próximo agente
 
-Atualizado em **18/10/2026**, após validar o portátil em VM e na CI.
+Atualizado em **18/10/2026**, ao preparar a publicação autorizada do Release.
 
 - Repositório: <https://github.com/eduardodaluz/deepWin>, branch `main`.
   Consulte `git log -1` para o commit atual. **Nenhum commit contém linha de
@@ -51,12 +51,13 @@ Atualizado em **18/10/2026**, após validar o portátil em VM e na CI.
   `./register-menu` e `./unregister-menu`, preservando personalizações.
   Build, verificação limpa, menu seguro, movimentação/remoção, restauração
   real e rollback entre versões foram testados; consultar o último adendo.
-- **Sem release, tag ou instalador publicado**: os artefatos existem como
-  artefatos de CI e em `dist/` local. Publicar o primeiro Release é decisão
-  do mantenedor. **Composição decidida:** publicar `.deb`, `.uab` e `.tar.xz`
-  juntos no primeiro Release **1.1.0**, após o aceite dos três, agora concluído.
-  A confirmação da publicação vem depois da validação; há um
-  [rascunho das notas](packaging/release-notes-1.1.0.md) preparado para revisão.
+- **Publicação autorizada pelo mantenedor** após o aceite dos três formatos:
+  primeiro Release **1.1.0**, com `.deb`, `.uab` e `.tar.xz` juntos.
+  [Notas finais](packaging/release-notes-1.1.0.md) e workflow de publicação
+  preparados. O push da tag `v1.1.0` dispara a validação dos artefatos
+  imutáveis dos três runs aprovados, criação de rascunho, upload e conferência
+  dos sete anexos antes de publicar. Não reutiliza credenciais do Docker.
+  Até a execução do workflow, não considerar a publicação concluída.
 - Ambiente preservado: VM de aceite **desligada** em `~/deepwin-vm/`
   (quando no ar, SSH porta 2222, usuário `deepwin` com sudo NOPASSWD;
   para tocar a sessão gráfica por SSH, exportar `DISPLAY=:0`,
@@ -78,8 +79,8 @@ unidades customizadas — conflitos se informam, nunca se sobrescrevem.
 
 Sequência sugerida para a próxima passagem:
 
-1. Preparar a publicação do primeiro Release 1.1.0 com os três formatos,
-   checksums e requisitos de runtime, conforme a composição já decidida.
+1. Concluir a publicação autorizada e conferir o Release público `v1.1.0`,
+   com os três instaladores, três checksums individuais e `SHA256SUMS`.
 2. Itens menores registrados: reboot completo da VM como teste
    complementar (autologin não confirmado), decisão de submeter o `.uab` à
    loja Linyaps (etapa distinta da geração do pacote), e reavaliar a
@@ -863,3 +864,25 @@ Nenhuma tag ou Release foi criado nesta implementação.
 
 O registro final altera só documentação e referencia o código aprovado
 `07fb017`, sem necessidade de repetir builds por essas alterações.
+
+## Preparação da publicação autorizada — 18/10/2026
+
+Após o aceite dos três formatos, o mantenedor respondeu **“Pode seguir”**,
+autorizando a publicação do primeiro Release. As notas foram finalizadas.
+O workflow `release.yml`, restrito à tag `v1.1.0`, usa o `GITHUB_TOKEN` da
+própria execução com `actions:read` e `contents:write`; não depende de login
+local no GitHub CLI nem acessa o token Docker/GHCR.
+
+O publicador fixa os IDs dos três runs e artefatos já aceitos, confere origem,
+resultado, commit e digest do ZIP, seleciona somente instaladores/checksums
+e valida cada checksum. Recusa alteração de código depois do aceite ou
+Release já existente. Cria um rascunho com sete anexos (três instaladores,
+três sidecars e `SHA256SUMS`), confere tamanho e digest remoto de todos e só
+então publica. A tag inclui apenas documentação e essa automação sobre o
+código aprovado. Se falhar depois de criar o rascunho, inspecionar o estado
+antes de tentar novamente; não sobrescreve nem apaga releases.
+
+Validação local: seis testes da publicação aprovados, incluindo ZIP alterado,
+checksum incorreto, nomes duplicados, origem divergente, artefato expirado e
+anexos remotos ausentes/adicionais/alterados; YAML e `git diff --check` válidos.
+Nenhum código da aplicação foi alterado.

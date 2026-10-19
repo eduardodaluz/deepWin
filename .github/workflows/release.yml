@@ -1,0 +1,48 @@
+name: Publish Release 1.1.0
+on:
+  push:
+    tags: [v1.1.0]
+permissions:
+  contents: read
+concurrency:
+  group: release-1.1.0
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test release validation
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
+      - name: Validate approved artifacts, upload draft and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 .github/scripts/publish_release.py 2>&1 | tee release.log
+      - name: Report failure tail
+        if: failure()
+        shell: bash
+        run: |
+          [ -f release.log ] || exit 0
+          message="$(tail -c 4000 release.log)"
+          message="${message//'%'/'%25'}"
+          message="${message//$'\r'/'%0D'}"
+          message="${message//$'\n'/'%0A'}"
+          printf '::error title=release.log::%s\n' "$message"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-publication-report
+          if-no-files-found: ignore
+          path: |
+            release.log
+            release-summary.json
