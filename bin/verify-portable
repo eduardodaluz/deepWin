@@ -1,0 +1,78 @@
+#!/usr/bin/python3
+"""Valida o portátil em Deepin 25 limpo com dependências nativas de execução."""
+import argparse
+import hashlib
+from pathlib import Path, PurePosixPath
+import re
+import shutil
+import subprocess
+import tarfile
+import tempfile
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def validate_archive(package):
+    checksum = Path(str(package) + '.sha256')
+    if not checksum.is_file():
+        raise ValueError('Checksum .sha256 ausente.')
+    match = re.fullmatch(r'([0-9a-f]{64}) [ *]([^\n]+)\n?', checksum.read_text())
+    if not match or match[2] != package.name:
+        raise ValueError('Checksum deve identificar somente o arquivo portátil informado.')
+    with package.open('rb') as stream:
+        if hashlib.file_digest(stream, 'sha256').hexdigest() != match[1]:
+            raise ValueError('Checksum do portátil não confere.')
+    top = package.name.removesuffix('.tar.xz')
+    if not re.fullmatch(r'DeepWin-[A-Za-z0-9.+~-]+-amd64-portable', top):
+        raise ValueError('Nome do arquivo portátil inválido.')
+    members = {}
+    with tarfile.open(package, 'r:xz') as archive:
+        for member in archive:
+            path = PurePosixPath(member.name)
+            if path.is_absolute() or '..' in path.parts or not path.parts or path.parts[0] != top:
+                raise ValueError('Caminho inesperado no portátil: ' + member.name)
+            if not (member.isfile() or member.isdir()) or member.mode & 0o7000:
+                raise ValueError('Entrada especial inesperada no portátil: ' + member.name)
+            if member.name in members:
+                raise ValueError('Entrada duplicada no portátil: ' + member.name)
+            members[member.name] = member
+            if any(part in ('.git', '.build', '__pycache__', 'sdk', 'pydeps') for part in path.parts):
+                raise ValueError('Conteúdo de desenvolvimento ou runtime embutido: ' + member.name)
+            if '.so' in path.name and path.name != 'libdeepwin-calculator.so':
+                raise ValueError('Biblioteca nativa inesperada no portátil: ' + member.name)
+    executables = ('deepwin', 'bin/deepwin', 'register-menu', 'unregister-menu', 'lib/deepwin/deepwin-ui')
+    for required in (*executables, 'README.md', 'lib/deepwin/portable-menu.py', 'lib/deepwin/gui/backend.py',
+                     'lib/deepwin/resources.json', 'lib/deepwin/VERSION',
+                     'lib/deepwin/qt6/plugins/generic/libdeepwin-calculator.so'):
+        member = members.get(top + '/' + required)
+        if member is None or not member.isfile():
+            raise ValueError('Arquivo obrigatório ausente: ' + required)
+        if required in executables and member.mode & 0o111 != 0o111:
+            raise ValueError('Launcher obrigatório sem permissão de execução: ' + required)
+    return top
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('package', nargs='?', type=Path)
+    args = parser.parse_args()
+    packages = [args.package] if args.package else sorted((ROOT / 'dist').glob('DeepWin-*-amd64-portable.tar.xz'))
+    if len(packages) != 1:
+        parser.error('Informe o único portátil .tar.xz que deseja validar.')
+    package = packages[0].resolve()
+    try:
+        top = validate_archive(package)
+    except (OSError, ValueError, tarfile.TarError) as error:
+        parser.error(str(error))
+    with tempfile.TemporaryDirectory(prefix='deepwin-portable-verify-') as temporary:
+        context = Path(temporary)
+        shutil.copyfile(package, context / 'portable.tar.xz')
+        shutil.copyfile(ROOT / 'packaging/verify-portable.sh', context / 'verify-portable.sh')
+        shutil.copyfile(ROOT / 'packaging/Dockerfile.test-portable', context / 'Dockerfile')
+        subprocess.run(['docker', 'build', '--progress=plain', '--build-arg', 'PORTABLE_ROOT=' + top,
+                        '-t', 'deepwin-portable-verified:local', str(context)], check=True)
+    print('PASS portátil validado com runtime nativo em Deepin 25 limpo:', package.name)
+
+
+if __name__ == '__main__':
+    main()

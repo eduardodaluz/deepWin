@@ -1,0 +1,186 @@
+#!/usr/bin/python3
+"""Gera o portátil Deepin 25 amd64; --container mantém o SDK fora do host."""
+import argparse
+import fcntl
+import hashlib
+import os
+from pathlib import Path
+import re
+import runpy
+import shutil
+import subprocess
+import tarfile
+import tempfile
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def prepare_image(temporary, version):
+    image = 'deepwin-deb-build:' + version
+    context = temporary / 'context'
+    (context / 'debian').mkdir(parents=True)
+    depends = re.search(r'^Build-Depends:.*(?:\n[ \t].*)*',
+                        (ROOT / 'debian/control').read_text(), re.M)
+    if not depends:
+        raise SystemExit('Build-Depends não encontrado em debian/control.')
+    (context / 'debian/control').write_text(
+        'Source: deepwin-build-deps\n' + depends[0] +
+        '\n\nPackage: deepwin-build-deps\nArchitecture: all\nDescription: Build dependencies\n')
+    shutil.copyfile(ROOT / 'packaging/Dockerfile.deb', context / 'Dockerfile')
+    subprocess.run(['docker', 'build', '-t', image, str(context)], check=True)
+    return image
+
+
+def expected_files(source):
+    files = {
+        'bin/deepwin', 'lib/deepwin/deepwin-ui',
+        'lib/deepwin/qt6/plugins/generic/libdeepwin-calculator.so',
+        'share/applications/devedu.deepin-configs.desktop',
+        'share/metainfo/devedu.deepin-configs.metainfo.xml',
+    }
+    files.update('lib/deepwin/' + name for name in ('VERSION', 'LICENSE', 'resources.json'))
+    files.update('lib/deepwin/bin/' + name for name in (
+        'zclaude', 'deepwin-calculator', 'deepin-clipboard-autopaste',
+        'refresh-deepin-wallpaper', 'deepwin-restore'))
+    files.update('lib/deepwin/gui/' + str(path.relative_to(source / 'gui'))
+                 for path in (source / 'gui').rglob('*.py'))
+    files.update('lib/deepwin/systemd/' + name for name in (
+        'deepin-clipboard-autopaste.service', 'deepin-wallpaper.service',
+        'deepin-wallpaper.timer'))
+    return files
+
+
+def validate_stage(stage, source):
+    expected = expected_files(source)
+    actual = set()
+    for path in stage.rglob('*'):
+        if path.is_symlink() or not (path.is_file() or path.is_dir()):
+            raise SystemExit('Tipo de arquivo não permitido no staging: ' + str(path))
+        if path.is_file():
+            actual.add(str(path.relative_to(stage)))
+    if actual != expected:
+        raise SystemExit('Staging inesperado; faltam: ' + repr(sorted(expected - actual)) +
+                         '; extras: ' + repr(sorted(actual - expected)))
+    return expected
+
+
+def create_archive(stage, destination, epoch):
+    # Normalizar também dono e modos evita incluir a identidade do empacotador.
+    with tarfile.open(destination, 'w:xz', format=tarfile.PAX_FORMAT) as archive:
+        for path in [stage, *sorted(stage.rglob('*'))]:
+            info = archive.gettarinfo(str(path), str(Path(stage.name) / path.relative_to(stage)))
+            info.uid = info.gid = 0
+            info.uname = info.gname = 'root'
+            info.mtime = epoch
+            info.mode = 0o755 if path.is_dir() or path.stat().st_mode & 0o111 else 0o644
+            if path.is_file():
+                with path.open('rb') as content:
+                    archive.addfile(info, content)
+            else:
+                archive.addfile(info)
+
+
+def source_epoch():
+    if 'SOURCE_DATE_EPOCH' in os.environ:
+        value = os.environ['SOURCE_DATE_EPOCH']
+    else:
+        result = (subprocess.run(['git', '-C', str(ROOT), 'log', '-1', '--format=%ct'],
+                                 capture_output=True, text=True) if shutil.which('git') else None)
+        value = result.stdout.strip() if result is not None and result.returncode == 0 else '0'
+    try:
+        epoch = int(value)
+        if epoch < 0:
+            raise ValueError
+        return epoch
+    except ValueError:
+        raise SystemExit('SOURCE_DATE_EPOCH deve ser um inteiro não negativo.')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--container', action='store_true', help='compilar no Docker oficial do Deepin 25')
+    parser.add_argument('--reuse-image', action='store_true', help='reutilizar a imagem SDK preparada por build-deb/build-portable')
+    parser.add_argument('--output', type=Path, default=ROOT / 'dist')
+    args = parser.parse_args()
+    if args.reuse_image and not args.container:
+        parser.error('--reuse-image exige --container.')
+    if args.container and not shutil.which('docker'):
+        parser.error('Docker não encontrado; nenhum SDK foi instalado no host.')
+    if not args.container and not shutil.which('cmake'):
+        parser.error('CMake não encontrado; use --container. Nenhum SDK foi instalado no host.')
+    version = (ROOT / 'VERSION').read_text().strip()
+    if not re.fullmatch(r'[0-9][A-Za-z0-9.+~-]*', version):
+        parser.error('VERSION inválida para nome de artefato.')
+    epoch = source_epoch()
+    output = args.output.resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    work = ROOT / '.build/portable'
+    work.mkdir(parents=True, exist_ok=True)
+    with (work / 'build.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        with tempfile.TemporaryDirectory(prefix='source-', dir=work) as directory:
+            temporary = Path(directory)
+            source = temporary / 'source'
+            source.mkdir()
+            # Mesmo snapshot restrito usado pelo Debian; nunca copia HOME/estado.
+            runpy.run_path(str(ROOT / 'bin/build-deb'))['copy_source'](source)
+            name = 'DeepWin-' + version + '-amd64-portable'
+            stage = temporary / name
+            install_root = temporary / 'install'
+            install_root.mkdir()
+            if args.container:
+                image = ('deepwin-deb-build:' + version if args.reuse_image else
+                         prepare_image(temporary, version))
+                script = '''test "$(dpkg --print-architecture)" = amd64
+cmake -S /source -B /tmp/deepwin-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/deepwin-portable -DCMAKE_INSTALL_LIBDIR=lib -DDEEPWIN_RESOURCE_DIR=lib/deepwin -DBUILD_TESTING=OFF
+cmake --build /tmp/deepwin-build --parallel 2
+DESTDIR=/stage cmake --install /tmp/deepwin-build
+'''
+                subprocess.run(['docker', 'run', '--rm', '--user', str(os.getuid()) + ':' + str(os.getgid()),
+                                '--mount', 'type=bind,src=' + str(source) + ',dst=/source,readonly',
+                                '--mount', 'type=bind,src=' + str(install_root) + ',dst=/stage',
+                                '--workdir', '/tmp', image, '/bin/sh', '-eu', '-c', script], check=True)
+            else:
+                architecture = subprocess.check_output(['dpkg', '--print-architecture'], text=True).strip()
+                if architecture != 'amd64':
+                    parser.error('O primeiro portátil suporta apenas amd64.')
+                build = temporary / 'build'
+                subprocess.run(['cmake', '-S', str(source), '-B', str(build), '-DCMAKE_BUILD_TYPE=Release',
+                                '-DCMAKE_INSTALL_PREFIX=/opt/deepwin-portable', '-DCMAKE_INSTALL_LIBDIR=lib',
+                                '-DDEEPWIN_RESOURCE_DIR=lib/deepwin', '-DBUILD_TESTING=OFF'], check=True)
+                subprocess.run(['cmake', '--build', str(build), '--parallel', '2'], check=True)
+                subprocess.run(['cmake', '--install', str(build)], env={**os.environ, 'DESTDIR': str(install_root)}, check=True)
+            # Prefix=/ tem tratamento especial usr/ no GNUInstallDirs. Usar um
+            # prefixo privado e extrair sua árvore preserva bin/lib/share e o
+            # resource relativo lib/deepwin sem caminhos absolutos no launcher.
+            (install_root / 'opt/deepwin-portable').rename(stage)
+            validate_stage(stage, source)
+            if 'resource="$prefix/lib/deepwin"' not in (stage / 'bin/deepwin').read_text():
+                raise SystemExit('O launcher instalado não usa os recursos relativos lib/deepwin.')
+            shutil.copyfile(source / 'packaging/portable/deepwin', stage / 'deepwin')
+            (stage / 'deepwin').chmod(0o755)
+            shutil.copyfile(source / 'packaging/portable/README.md', stage / 'README.md')
+            shutil.copyfile(source / 'packaging/portable/menu.py', stage / 'lib/deepwin/portable-menu.py')
+            for launcher in ('register-menu', 'unregister-menu'):
+                shutil.copyfile(source / 'packaging/portable' / launcher, stage / launcher)
+                (stage / launcher).chmod(0o755)
+            artifact = temporary / (name + '.tar.xz')
+            create_archive(stage, artifact, epoch)
+            checksum = temporary / (artifact.name + '.sha256')
+            checksum.write_text(hashlib.sha256(artifact.read_bytes()).hexdigest() + '  ' + artifact.name + '\n')
+            # Os temporários ficam no destino para que a publicação seja atômica
+            # mesmo quando --output está em outro filesystem.
+            for path in (artifact, checksum):
+                with tempfile.NamedTemporaryFile(prefix='.' + path.name + '-', dir=output, delete=False) as pending:
+                    pending_path = Path(pending.name)
+                try:
+                    shutil.copyfile(path, pending_path)
+                    pending_path.chmod(0o644)
+                    pending_path.replace(output / path.name)
+                finally:
+                    pending_path.unlink(missing_ok=True)
+    print('Portátil e checksum disponíveis em:', output)
+
+
+if __name__ == '__main__':
+    main()

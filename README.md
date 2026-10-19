@@ -103,6 +103,48 @@ UAB com checksum e passou também no runner limpo do GitHub. A primeira
 publicação em Releases ainda depende de decisão do mantenedor; há um
 [rascunho das notas](packaging/release-notes-1.1.0.md) para revisão.
 
+### Execução pelo portátil (.tar.xz)
+
+O portátil para **Deepin 25 amd64** contém a aplicação e seus helpers,
+reutilizando os runtimes nativos Qt 6.8+/DTK 6 Widgets/Python 3 com D-Bus/GI.
+Não é autocontido: os requisitos e a limpeza estão no
+[README incluído no arquivo](packaging/portable/README.md).
+
+```bash
+sha256sum -c DeepWin-1.1.0-amd64-portable.tar.xz.sha256
+tar -xJf DeepWin-1.1.0-amd64-portable.tar.xz
+cd DeepWin-1.1.0-amd64-portable
+./deepwin
+```
+
+Extrair e abrir não instala um pacote DeepWin, registra menu ou ativa
+ajustes. O registro no menu é opcional e explícito, com `./register-menu`;
+`./unregister-menu` remove apenas essa entrada. Após mover a pasta, execute
+o registro novamente para atualizar o caminho. Launchers personalizados
+são preservados, inclusive quando impedem uma atualização ou remoção.
+
+Preferências, backups e runtime persistente são compartilhados com os outros
+formatos. Os helpers preparados ao ativar ajustes continuam funcionando
+depois de mover ou apagar a pasta portátil. Remova o registro de menu antes
+de apagar a pasta e use a restauração descrita abaixo para desfazer ajustes.
+
+Para gerar e validar o arquivo sem instalar ferramentas no host:
+
+```bash
+./bin/build-portable --container
+./bin/verify-portable
+```
+
+`--reuse-image` reutiliza o ambiente de build já preparado; `--output`
+seleciona outro diretório de saída. Os comandos de build geram o `.tar.xz`
+e seu SHA-256 em `dist/`. A validação usa outro container com somente
+dependências de execução, sem instalar o pacote DeepWin, e testa caminhos
+com espaços, pasta somente leitura, menu e persistência após remoção.
+
+O primeiro Release **1.1.0 reunirá `.deb`, `.uab` e `.tar.xz`**, conforme
+decisão do mantenedor, após o aceite do portátil. Os artefatos ainda não
+foram publicados em Releases.
+
 ### Instalação pelo código-fonte
 
 A interface requer uma sessão gráfica do Deepin, os runtimes DTK 6 Widgets e
@@ -216,7 +258,9 @@ em três fases: **1. `.deb`**, **2. Linyaps/Linglong (`.uab`)** e
 **3. portátil (`.tar.xz`)**. O alvo inicial é Deepin 25 em amd64, com os mesmos
 ajustes e backups por usuário. A fase 1 está validada e publicada em CI; a
 fase 2 tem o candidato `.uab` aceito em VM e workflow Linyaps verde, com
-artefato e checksum disponíveis na CI. A fase 3 permanece planejada.
+artefato e checksum disponíveis na CI. A fase 3 já gera o portátil, validado
+localmente em imagem limpa e VM; falta executar o workflow portátil no
+GitHub. O primeiro Release aguardará o aceite dos três formatos.
 
 ### Runtime persistente e restauração
 

@@ -1,5 +1,10 @@
 # DeepWin 1.1.0 — rascunho da primeira release
 
+**Decisão do mantenedor em 18/10/2026:** aguardar o aceite do portátil e
+publicar `.deb`, `.uab` e `.tar.xz` juntos no primeiro Release 1.1.0.
+Os arquivos serão publicados após concluir a validação e confirmar a
+publicação; este documento prepara essa entrega.
+
 Painel nativo DTK 6/Qt 6 para configurar dez integrações do desktop Deepin:
 colagem pelo histórico, atalhos de áreas de trabalho e monitores, captura de
 área, prévias de grupos da dock, vírgula decimal na calculadora e controle
@@ -15,9 +20,10 @@ Arquivos gerados pela CI e previstos para anexar ao Release:
 
 - `devedu.deepin-configs_1.1.0-3_amd64.deb` e seu SHA-256.
 - `devedu.deepin-configs_1.1.0.0_x86_64_main.uab` e seu SHA-256.
+- `DeepWin-1.1.0-amd64-portable.tar.xz` e seu SHA-256 (CI portátil pendente).
 
-Os números dos pacotes seguem as convenções de cada formato; ambos são a
-aplicação 1.1.0. O portátil `.tar.xz` será entregue em fase posterior.
+Os números dos pacotes seguem as convenções de cada formato; todos são a
+aplicação 1.1.0.
 
 ## Instalação
 
@@ -48,9 +54,24 @@ são opcionais para o uso geral. No aplicativo Linyaps, instalar versões do
 Claude pelo seletor da GUI permanece indisponível; o wrapper `zclaude`
 executado no host continua utilizável.
 
+Portátil, depois de conferir o arquivo de checksum adjacente:
+
+```bash
+sha256sum -c DeepWin-1.1.0-amd64-portable.tar.xz.sha256
+tar -xJf DeepWin-1.1.0-amd64-portable.tar.xz
+cd DeepWin-1.1.0-amd64-portable
+./deepwin
+```
+
+O portátil usa os runtimes Qt 6.8+/DTK 6/Python D-Bus/GI do hospedeiro e não
+é autocontido. Não exige instalar o pacote DeepWin, Git, SDK ou compilador.
+O [README do portátil](portable/README.md) lista as dependências nativas e
+a limpeza. `./register-menu` e `./unregister-menu` gerenciam somente o
+registro opcional no menu; abrir a interface não faz esse registro.
+
 ## Dados e remoção
 
-Backups, preferências e runtime persistente são compartilhados pelos dois
+Backups, preferências e runtime persistente são compartilhados pelos três
 formatos, em diretórios XDG do usuário. Arquivos e unidades personalizados
 são preservados; conflitos são informados.
 
@@ -68,6 +89,11 @@ preservado após removê-la:
 - Interação humana com dock, calculadora, captura, colagem e workspaces.
 - Preservação de backups, serviços e comando de restauração após remoção.
 - 126 testes Python e build UAB local aprovados nesta passagem.
+- 142 testes Python aprovados após adicionar a integração opcional de menu.
+- Portátil validado em imagem limpa, sem pacote DeepWin ou SDK, e em sessão
+  gráfica real de uma VM Deepin 25: caminhos com espaços, pasta somente
+  leitura, coexistência e remoção dos outros formatos, serviço persistente
+  e restauração real após apagar a pasta.
 - CI Debian: [build e verificação aprovados](https://github.com/eduardodaluz/deepWin/actions/runs/39177256036).
 - CI Linyaps: [build, smoke tests e exportação aprovados](https://github.com/eduardodaluz/deepWin/actions/runs/39177256037).
 - Artefatos `deepwin-deb-amd64` e `deepwin-uab-amd64` disponíveis nos runs

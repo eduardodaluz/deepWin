@@ -19,7 +19,11 @@ UAB não puxa Base/Runtime do repositório e a série stock já está presente.
 [CI Linyaps aprovada](https://github.com/eduardodaluz/deepWin/actions/runs/39177256037),
 com build, smoke tests, exportação e upload do UAB com checksum. O builder
 foi espelhado publicamente no GHCR; o workflow inclui os ajustes de
-namespaces e de UID do staging exigidos pelo runner. A fase 3 pode iniciar.
+namespaces e de UID do staging exigidos pelo runner. A fase 3 já está
+implementada e validada localmente em imagem limpa e em snapshot de VM com
+sessão gráfica; aguarda a execução do workflow portátil no GitHub.
+O mantenedor decidiu que o primeiro Release 1.1.0 reunirá os três formatos,
+após concluir o aceite do portátil.
 O diagnóstico e os checklists abaixo registram o plano
 original; consulte a [passagem de desenvolvimento](continuidade-desenvolvimento.md)
 para o estado efetivo, os testes realizados e as pendências antes de marcar
@@ -243,33 +247,53 @@ A primeira entrega portátil será um `.tar.xz` com diretório extraível e coma
 `./deepwin`. AppImage poderá ser avaliado como embalagem posterior da mesma base;
 não é requisito desta primeira entrega portátil.
 
-- [ ] Gerar a árvore portátil a partir do mesmo staging e da mesma versão dos
+- [x] Gerar a árvore portátil a partir do mesmo staging e da mesma versão dos
       outros formatos, com resolução de recursos relativa ao launcher.
-- [ ] Distribuir os componentes necessários da aplicação e levantar quais
+- [x] Distribuir os componentes necessários da aplicação e levantar quais
       bibliotecas podem ser incluídas; documentar o que permanece dependente
       do Deepin hospedeiro, inclusive Python/GI e serviços nativos.
-- [ ] Validar o conjunto final em máquina limpa. Não chamar de autocontido um
+- [x] Validar o conjunto final em máquina limpa. Não chamar de autocontido um
       arquivo que só funciona porque o SDK ou bibliotecas extras estão instalados.
-- [ ] Preservar o ambiente nativo ao chamar serviços/ferramentas do host; bibliotecas
+- [x] Preservar o ambiente nativo ao chamar serviços/ferramentas do host; bibliotecas
       da GUI portátil não devem contaminar o ambiente da calculadora ou do systemd.
-- [ ] Permitir abrir sem registrar menu, autostart ou serviços automaticamente.
+- [x] Permitir abrir sem registrar menu, autostart ou serviços automaticamente.
       Disponibilizar registro opcional no menu e sua remoção.
 
-Portátil significa que a GUI pode ser executada sem instalar um pacote de sistema.
+Implementação: `bin/build-portable` compila por CMake e gera
+`DeepWin-1.1.0-amd64-portable.tar.xz` com SHA-256, sem depender de um `.deb`
+existente. O arquivo contém a aplicação, o plugin da calculadora e os helpers;
+Qt 6.8+/DTK 6/Python D-Bus/GI são runtimes nativos do Deepin 25, explicitados
+no [README distribuído](packaging/portable/README.md). Não há bibliotecas
+Qt/DTK privadas nem SDK incluídos. `bin/verify-portable` testa uma imagem
+limpa com esses runtimes, sem instalar o DeepWin. O workflow portátil está
+preparado para build, verificação e upload do arquivo com checksum.
+
+Portátil significa que a GUI pode ser executada sem instalar um pacote do DeepWin.
 Ativar um ajuste persistente necessariamente grava configurações do usuário; isso
 será explicado no produto. Os helpers estáveis preparados na fase 1 mantêm esses
 ajustes funcionais mesmo que o diretório portátil seja movido ou removido.
 
 ### Critérios de aceite
 
-- [ ] Extrair e abrir como usuário comum, sem instalação de pacote do DeepWin.
-- [ ] Funcionar fora do checkout e em caminhos com espaços.
-- [ ] Abrir a partir de uma pasta sem permissão de escrita, mantendo o estado em XDG.
-- [ ] Mover/remover a pasta após ativar um ajuste sem quebrar o serviço ou o rollback.
-- [ ] Reutilizar preferências e backups existentes, inclusive alternando formatos.
-- [ ] Trocar a versão portátil e retornar à anterior quando o esquema for compatível;
+- [x] Extrair e abrir como usuário comum, sem instalação de pacote do DeepWin.
+- [x] Funcionar fora do checkout e em caminhos com espaços.
+- [x] Abrir a partir de uma pasta sem permissão de escrita, mantendo o estado em XDG.
+- [x] Mover/remover a pasta após ativar um ajuste sem quebrar o serviço ou o rollback.
+- [x] Reutilizar preferências e backups existentes, inclusive alternando formatos.
+- [x] Trocar a versão portátil e retornar à anterior quando o esquema for compatível;
       detectar claramente um estado de versão mais nova que não possa ser lido.
 - [ ] Publicar requisitos, instruções de extração, limpeza e checksum junto ao arquivo.
+
+Evidências locais: 142 testes Python; build Docker com e sem reuso da imagem;
+verificação limpa sem SDK/compilador, incluindo menu via GLib e recusa de
+schema futuro. Na VM, abertura nativa com dez recursos disponíveis,
+preservação dos backups anteriores, remoção real de `.deb` e `.uab`,
+ativação da colagem pelo portátil, movimentação/remoção da pasta e
+restauração funcional do clipboard pelo runtime. A compatibilidade de ida e
+volta foi exercitada em `1.1.0 → fixture 1.1.1 → 1.1.0`, preservando hashes
+dos backups e schema; a fixture é somente teste e não uma versão publicada.
+Requisitos e limpeza já acompanham o arquivo; a publicação em CI/Release
+ainda está pendente.
 
 ## Matriz de validação compartilhada
 
@@ -296,11 +320,12 @@ completa, com build e verificação publicados em CI. O UAB 1.1.0.0 foi aceito
 na mesma VM, usando Base e Runtime DTK da série 25.2.2; o workflow Linyaps
 também passou em runner limpo, com artefato e checksum disponíveis.
 
-Falta a decisão do mantenedor sobre publicar o primeiro Release com `.deb`,
-`.uab`, checksums e requisitos de runtime. Há um
+O mantenedor decidiu aguardar o portátil e publicar os três formatos juntos
+no primeiro Release 1.1.0, com checksums e requisitos de runtime. Há um
 [rascunho das notas](packaging/release-notes-1.1.0.md) preparado para revisão.
-A composição das
-bibliotecas portáteis será definida na fase 3. A ampliação de plataformas
+A composição do portátil está definida: componentes do aplicativo com
+runtimes nativos do Deepin, sem bibliotecas Qt/DTK privadas. Falta concluir
+a CI portátil e confirmar a publicação do Release. A ampliação de plataformas
 exige reavaliar a ABI do plugin da calculadora (referência testada: Qt 6.8
 do Deepin 25); o aceite atual não declara suporte genérico a outros desktops
 ou a versões anteriores do Qt.

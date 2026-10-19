@@ -6,7 +6,7 @@ o ponto de partida atual para o próximo agente.
 
 ## Ponto de partida para o próximo agente
 
-Atualizado em **18/10/2026**, após concluir a CI do Linyaps.
+Atualizado em **18/10/2026**, após implementar e validar localmente o portátil.
 
 - Repositório: <https://github.com/eduardodaluz/deepWin>, branch `main`,
   base desta retomada `471a2dd`, com `origin/main` igual antes das alterações.
@@ -42,13 +42,21 @@ Atualizado em **18/10/2026**, após concluir a CI do Linyaps.
   O workflow usa esse digest como padrão. **A imagem é pública e o pull
   anônimo pelo digest passou**, usando configuração Docker temporária vazia.
   Procedimento em [packaging/linyaps-builder.md](packaging/linyaps-builder.md).
-- **Fase 3 (portátil `.tar.xz`): não iniciada; condição de entrada satisfeita.**
-  É a próxima implementação. A base comum (runtime persistente, staging,
-  migração) está estável e reutilizada pelos dois formatos prontos.
+- **Fase 3 (portátil `.tar.xz`): implementada e aceita localmente em imagem
+  limpa e snapshot de VM com sessão gráfica; CI ainda pendente.** Candidato
+  `DeepWin-1.1.0-amd64-portable.tar.xz`, SHA-256
+  `2c4130b5bb0bb9ef8ed8751b0bb6aac9a35f39f5abc4ea5784a3ed1861a2038e`.
+  Reutiliza o staging CMake e os runtimes nativos Qt/DTK/Python do Deepin 25;
+  não é autocontido. A aplicação abre por `./deepwin`; menu opcional por
+  `./register-menu` e `./unregister-menu`, preservando personalizações.
+  Build, verificação limpa, menu seguro, movimentação/remoção, restauração
+  real e rollback entre versões foram testados; consultar o último adendo.
 - **Sem release, tag ou instalador publicado**: os artefatos existem como
   artefatos de CI e em `dist/` local. Publicar o primeiro Release é decisão
-  do mantenedor. Há um [rascunho das notas](packaging/release-notes-1.1.0.md)
-  preparado para revisão.
+  do mantenedor. **Composição decidida:** aguardar o aceite do portátil e
+  publicar `.deb`, `.uab` e `.tar.xz` juntos no primeiro Release **1.1.0**.
+  A confirmação da publicação vem depois da validação; há um
+  [rascunho das notas](packaging/release-notes-1.1.0.md) preparado para revisão.
 - Ambiente preservado: VM de aceite **desligada** em `~/deepwin-vm/`
   (quando no ar, SSH porta 2222, usuário `deepwin` com sudo NOPASSWD;
   para tocar a sessão gráfica por SSH, exportar `DISPLAY=:0`,
@@ -70,9 +78,10 @@ unidades customizadas — conflitos se informam, nunca se sobrescrevem.
 
 Sequência sugerida para a próxima passagem:
 
-1. Decidir com o mantenedor o primeiro Release (`.deb` + `.uab` + checksums
-   + requisitos de runtime na página).
-2. Iniciar a fase 3 conforme o [plano](plano-distribuicao-deepwin.md).
+1. Enviar a implementação do portátil e confirmar o workflow no GitHub,
+   com build, verificação e upload do `.tar.xz` com checksum.
+2. Preparar a publicação do primeiro Release 1.1.0 com os três formatos,
+   checksums e requisitos de runtime, conforme a composição já decidida.
 3. Itens menores registrados: reboot completo da VM como teste
    complementar (autologin não confirmado), decisão de submeter o `.uab` à
    loja Linyaps (etapa distinta da geração do pacote), e reavaliar a
@@ -762,3 +771,71 @@ iniciar, mas não foi implementada nesta correção da CI.
 O commit seguinte altera apenas documentação; os testes e o build validados
 são os do código `fa99d90`. Não é necessário repetir os builds por essas
 edições documentais.
+
+## Fase 3 implementada com subagentes — 18/10/2026
+
+O mantenedor solicitou explicitamente iniciar o portátil com subagentes.
+Três frentes trabalharam em build, menu opcional e verificação/CI, seguidas
+de revisão independente. A composição do primeiro Release também foi
+decidida: **aguardar o aceite do portátil e publicar `.deb`, `.uab` e
+`.tar.xz` juntos no Release 1.1.0**. Nenhuma publicação ou tag foi feita.
+
+Implementação:
+
+- `bin/build-portable` usa os mesmos fontes permitidos e alvos CMake, com
+  build nativo ou Docker (`--container`, `--reuse-image`, `--output`), lock,
+  staging validado por lista exata, tar normalizado e SHA-256. O prefixo
+  temporário `/opt/deepwin-portable` evita o tratamento especial `usr/` que
+  GNUInstallDirs aplica a `/`; somente a árvore instalada vai para o arquivo.
+- `DeepWin-1.1.0-amd64-portable.tar.xz` contém `./deepwin`, `bin/deepwin`,
+  `lib/deepwin/`, metadados de desktop e README. O launcher resolve recursos
+  relativamente à extração, sem fallback para o `.deb` instalado. As
+  bibliotecas Qt 6.8+/DTK 6/Python D-Bus/GI são requisitos nativos explícitos;
+  não há bibliotecas GUI privadas, SDK ou Python embutido. O ambiente Qt e
+  de bibliotecas do hospedeiro é preservado.
+- `./register-menu` e `./unregister-menu` são opcionais; `--help` não escreve
+  estado. A entrada `devedu.deepin-configs-portable.desktop` e seu marcador
+  em XDG usam hashes, validação de ownership, lock e rollback, recusando
+  arquivos personalizados. Paths com espaços e caracteres reservados são
+  escapados em duas camadas e testados com lançamento real por GLib.
+- `bin/verify-portable` valida checksum e segurança do tar e prepara outra
+  imagem Deepin só com runtimes, sem instalar DeepWin ou SDK. O teste exige
+  os launchers anunciados, executa usuário não root em pasta somente leitura,
+  consulta status sem alterações, testa GUI, menu, schema futuro e runtime
+  persistente após mover/remover a origem.
+- `.github/workflows/portable.yml` fixa Ubuntu 24.04, executa build e
+  verificação e anexa arquivo/checksum e logs. Falhas viram uma anotação
+  compacta por log; o envio e a primeira execução ainda estão pendentes.
+
+Evidências:
+
+| Verificação | Resultado |
+| --- | --- |
+| Suíte Python | 142 testes passando, incluindo 16 casos de segurança do menu |
+| Build Docker, com e sem `--reuse-image` | PASS; o caminho completo de preparação da imagem também foi exercitado |
+| `bin/verify-portable` | PASS com somente runtimes: plugin Qt, versão, status sem efeitos, GUI, menu GLib, pasta com espaços/caracteres especiais, schema futuro recusado, movimento/remoção e helpers preservados |
+| VM Deepin 25.2.0 em snapshot descartável | GUI nativa com 10/10 recursos disponíveis, em pasta somente leitura, com screenshot inspecionada |
+| Coexistência e remoção de formatos na VM | Backups e unidades anteriores preservados; `.deb` e `.uab` removidos de verdade no snapshot, portátil continuou abrindo sem eles |
+| Colagem ativada pelo portátil; pasta movida/removida | Serviço reiniciado a partir do runtime depois de apagar a origem; `deepwin-restore clipboard` restaurou de verdade, reduzindo os backups de 9 para 8 |
+| Troca de versão e retorno | `1.1.0 → fixture 1.1.1 → 1.1.0`, GUI e runtime na versão esperada, hashes de backups e schema preservados |
+| Candidato final | Checksum conferido e GUI nativa com dez recursos consultados |
+
+A fixture 1.1.1 foi compilada de uma cópia isolada em `/tmp`, alterando somente
+o `VERSION` dessa cópia. Não é candidato nem release; o projeto real continua
+em 1.1.0. O teste de schema futuro usa formato 999 e confirma recusa sem
+alterar dados. A normalização do tar não declara reprodutibilidade genérica
+entre toolchains diferentes.
+
+Logs locais: `/tmp/deepwin-portable-final-build.log`,
+`/tmp/deepwin-portable-final-verify.log`,
+`/tmp/deepwin-portable-vm-persistence.log`,
+`/tmp/deepwin-portable-vm-rollback.log` e
+`/tmp/deepwin-portable-vm-final.log`. Captura em
+`/tmp/deepwin-portable-native.png`, fora do pacote e do repositório.
+O snapshot foi desligado após o aceite; o disco original da VM foi preservado,
+incluindo seus aplicativos e configuração anterior de login.
+
+Falta enviar a implementação e confirmar a CI portátil. O candidato local
+usa o timestamp de fonte da base desta passagem; artefatos de outro commit
+podem ter SHA-256 diferente por metadados de empacotamento. Use sempre o
+checksum que acompanha o artefato efetivamente baixado.

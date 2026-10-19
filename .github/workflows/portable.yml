@@ -1,0 +1,49 @@
+name: Portable archive
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test portable archive in Deepin 25
+        shell: bash
+        run: |
+          set -o pipefail
+          ./bin/build-portable --container 2>&1 | tee build.log
+      - name: Verify portable archive with native runtimes in clean Deepin 25
+        shell: bash
+        run: |
+          set -o pipefail
+          ./bin/verify-portable 2>&1 | tee verify.log
+      - name: Report failure tail
+        if: failure()
+        shell: bash
+        run: |
+          for log in build.log verify.log; do
+            [ -f "$log" ] || continue
+            message="$(tail -c 4000 "$log")"
+            message="${message//'%'/'%25'}"
+            message="${message//$'\r'/'%0D'}"
+            message="${message//$'\n'/'%0A'}"
+            printf '::error title=%s::%s\n' "$log" "$message"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deepwin-portable-logs
+          if-no-files-found: ignore
+          path: |
+            build.log
+            verify.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deepwin-portable-amd64
+          path: |
+            dist/*-amd64-portable.tar.xz
+            dist/*-amd64-portable.tar.xz.sha256
