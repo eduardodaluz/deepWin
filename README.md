@@ -258,9 +258,9 @@ em três fases: **1. `.deb`**, **2. Linyaps/Linglong (`.uab`)** e
 **3. portátil (`.tar.xz`)**. O alvo inicial é Deepin 25 em amd64, com os mesmos
 ajustes e backups por usuário. A fase 1 está validada e publicada em CI; a
 fase 2 tem o candidato `.uab` aceito em VM e workflow Linyaps verde, com
-artefato e checksum disponíveis na CI. A fase 3 já gera o portátil, validado
-localmente em imagem limpa e VM; falta executar o workflow portátil no
-GitHub. O primeiro Release aguardará o aceite dos três formatos.
+artefato e checksum disponíveis na CI. A fase 3 está validada em imagem
+limpa, VM e no [workflow portátil](https://github.com/eduardodaluz/deepWin/actions/runs/39179478620),
+com artefato e checksum. O primeiro Release 1.1.0 reunirá os três formatos.
 
 ### Runtime persistente e restauração
 

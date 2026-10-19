@@ -6,19 +6,19 @@ o ponto de partida atual para o próximo agente.
 
 ## Ponto de partida para o próximo agente
 
-Atualizado em **18/10/2026**, após implementar e validar localmente o portátil.
+Atualizado em **18/10/2026**, após validar o portátil em VM e na CI.
 
-- Repositório: <https://github.com/eduardodaluz/deepWin>, branch `main`,
-  base desta retomada `471a2dd`, com `origin/main` igual antes das alterações.
+- Repositório: <https://github.com/eduardodaluz/deepWin>, branch `main`.
   Consulte `git log -1` para o commit atual. **Nenhum commit contém linha de
   coautoria do Claude**: o mantenedor pediu a remoção (seis commits
   reescritos com árvores idênticas e force push com lease) e commits novos
   devem sair sem o trailer.
 - O mantenedor **autorizou explicitamente o push à `main`** após a rejeição
-  automática inicial. Código validado nos dois workflows: `fa99d90`.
-  **CI Debian e Linyaps verdes**, com os artefatos publicados nos runs
-  [39177256036](https://github.com/eduardodaluz/deepWin/actions/runs/39177256036)
-  e [39177256037](https://github.com/eduardodaluz/deepWin/actions/runs/39177256037).
+  automática inicial. Código validado nos três workflows: `07fb017`.
+  **CI Debian, Linyaps e portátil verdes**, com artefatos publicados nos runs
+  [39179478622](https://github.com/eduardodaluz/deepWin/actions/runs/39179478622),
+  [39179478573](https://github.com/eduardodaluz/deepWin/actions/runs/39179478573)
+  e [39179478620](https://github.com/eduardodaluz/deepWin/actions/runs/39179478620).
 - **Fase 1 (.deb): concluída e publicada em CI.** Candidato
   `devedu.deepin-configs_1.1.0-3_amd64.deb`; workflow Debian verde em todos
   os pushes; aceite em VM completo (adendo de 18/10).
@@ -42,8 +42,8 @@ Atualizado em **18/10/2026**, após implementar e validar localmente o portátil
   O workflow usa esse digest como padrão. **A imagem é pública e o pull
   anônimo pelo digest passou**, usando configuração Docker temporária vazia.
   Procedimento em [packaging/linyaps-builder.md](packaging/linyaps-builder.md).
-- **Fase 3 (portátil `.tar.xz`): implementada e aceita localmente em imagem
-  limpa e snapshot de VM com sessão gráfica; CI ainda pendente.** Candidato
+- **Fase 3 (portátil `.tar.xz`): concluída, aceita em imagem limpa, snapshot
+  de VM com sessão gráfica e [CI](https://github.com/eduardodaluz/deepWin/actions/runs/39179478620).** Candidato local
   `DeepWin-1.1.0-amd64-portable.tar.xz`, SHA-256
   `2c4130b5bb0bb9ef8ed8751b0bb6aac9a35f39f5abc4ea5784a3ed1861a2038e`.
   Reutiliza o staging CMake e os runtimes nativos Qt/DTK/Python do Deepin 25;
@@ -53,8 +53,8 @@ Atualizado em **18/10/2026**, após implementar e validar localmente o portátil
   real e rollback entre versões foram testados; consultar o último adendo.
 - **Sem release, tag ou instalador publicado**: os artefatos existem como
   artefatos de CI e em `dist/` local. Publicar o primeiro Release é decisão
-  do mantenedor. **Composição decidida:** aguardar o aceite do portátil e
-  publicar `.deb`, `.uab` e `.tar.xz` juntos no primeiro Release **1.1.0**.
+  do mantenedor. **Composição decidida:** publicar `.deb`, `.uab` e `.tar.xz`
+  juntos no primeiro Release **1.1.0**, após o aceite dos três, agora concluído.
   A confirmação da publicação vem depois da validação; há um
   [rascunho das notas](packaging/release-notes-1.1.0.md) preparado para revisão.
 - Ambiente preservado: VM de aceite **desligada** em `~/deepwin-vm/`
@@ -78,11 +78,9 @@ unidades customizadas — conflitos se informam, nunca se sobrescrevem.
 
 Sequência sugerida para a próxima passagem:
 
-1. Enviar a implementação do portátil e confirmar o workflow no GitHub,
-   com build, verificação e upload do `.tar.xz` com checksum.
-2. Preparar a publicação do primeiro Release 1.1.0 com os três formatos,
+1. Preparar a publicação do primeiro Release 1.1.0 com os três formatos,
    checksums e requisitos de runtime, conforme a composição já decidida.
-3. Itens menores registrados: reboot completo da VM como teste
+2. Itens menores registrados: reboot completo da VM como teste
    complementar (autologin não confirmado), decisão de submeter o `.uab` à
    loja Linyaps (etapa distinta da geração do pacote), e reavaliar a
    privatização de `XDG_*_HOME` quando sair a próxima minor do linyaps
@@ -839,3 +837,29 @@ Falta enviar a implementação e confirmar a CI portátil. O candidato local
 usa o timestamp de fonte da base desta passagem; artefatos de outro commit
 podem ter SHA-256 diferente por metadados de empacotamento. Use sempre o
 checksum que acompanha o artefato efetivamente baixado.
+
+## Aceite final dos três formatos na CI — 18/10/2026
+
+A implementação foi enviada no commit `07fb017`. Os três workflows passaram
+no mesmo código, sem regressão das fases anteriores:
+
+| Workflow | Resultado | Artefato disponível |
+| --- | --- | --- |
+| [Portable archive — 39179478620](https://github.com/eduardodaluz/deepWin/actions/runs/39179478620) | Build, verificação limpa e upload aprovados | `deepwin-portable-amd64`, ID `12155179755` |
+| [Debian package — 39179478622](https://github.com/eduardodaluz/deepWin/actions/runs/39179478622) | Build, CTest/Lintian e verificação de instalação aprovados | `deepwin-deb-amd64`, ID `12155199625` |
+| [Linyaps package — 39179478573](https://github.com/eduardodaluz/deepWin/actions/runs/39179478573) | Build, smoke, exportação e upload aprovados | `deepwin-uab-amd64`, ID `12155493804` |
+
+A API confirmou os pacotes e os dois artefatos de logs disponíveis e não
+expirados. Cada grupo de pacote contém seu checksum; o README acompanha o
+portátil. Com isso, os critérios locais, de VM e de CI da fase 3 estão
+concluídos. Os checklists antigos das fases 1 e 2 permanecem históricos.
+
+**Decisão final de composição do primeiro Release:** versão **1.1.0**, com
+`.deb`, `.uab` e `.tar.xz` juntos, seus SHA-256 e requisitos por formato.
+O mantenedor escolheu aguardar o portátil e esse aceite foi concluído.
+Os três arquivos estão preparados como artefatos de CI; falta a confirmação
+da publicação em Releases, conforme combinado ao escolher a composição.
+Nenhuma tag ou Release foi criado nesta implementação.
+
+O registro final altera só documentação e referencia o código aprovado
+`07fb017`, sem necessidade de repetir builds por essas alterações.

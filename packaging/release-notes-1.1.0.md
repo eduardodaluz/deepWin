@@ -20,7 +20,7 @@ Arquivos gerados pela CI e previstos para anexar ao Release:
 
 - `devedu.deepin-configs_1.1.0-3_amd64.deb` e seu SHA-256.
 - `devedu.deepin-configs_1.1.0.0_x86_64_main.uab` e seu SHA-256.
-- `DeepWin-1.1.0-amd64-portable.tar.xz` e seu SHA-256 (CI portátil pendente).
+- `DeepWin-1.1.0-amd64-portable.tar.xz` e seu SHA-256.
 
 Os números dos pacotes seguem as convenções de cada formato; todos são a
 aplicação 1.1.0.
@@ -94,10 +94,13 @@ preservado após removê-la:
   gráfica real de uma VM Deepin 25: caminhos com espaços, pasta somente
   leitura, coexistência e remoção dos outros formatos, serviço persistente
   e restauração real após apagar a pasta.
-- CI Debian: [build e verificação aprovados](https://github.com/eduardodaluz/deepWin/actions/runs/39177256036).
-- CI Linyaps: [build, smoke tests e exportação aprovados](https://github.com/eduardodaluz/deepWin/actions/runs/39177256037).
+- CI Debian: [build e verificação aprovados](https://github.com/eduardodaluz/deepWin/actions/runs/39179478622).
+- CI Linyaps: [build, smoke tests e exportação aprovados](https://github.com/eduardodaluz/deepWin/actions/runs/39179478573).
+- CI portátil: [build e verificação aprovados](https://github.com/eduardodaluz/deepWin/actions/runs/39179478620).
 - Artefatos `deepwin-deb-amd64` e `deepwin-uab-amd64` disponíveis nos runs
-  acima; anexar os pacotes e seus checksums gerados antes de publicar.
+  acima, além de `deepwin-portable-amd64` no run portátil; anexar os pacotes
+  e seus checksums gerados antes de publicar.
+- Os três workflows aprovam o mesmo commit de código `07fb017`.
 
 Licença MIT. Este arquivo é um rascunho para revisão; não houve publicação de
 Release nem criação de tag.

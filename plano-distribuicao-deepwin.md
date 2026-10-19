@@ -20,8 +20,8 @@ UAB não puxa Base/Runtime do repositório e a série stock já está presente.
 com build, smoke tests, exportação e upload do UAB com checksum. O builder
 foi espelhado publicamente no GHCR; o workflow inclui os ajustes de
 namespaces e de UID do staging exigidos pelo runner. A fase 3 já está
-implementada e validada localmente em imagem limpa e em snapshot de VM com
-sessão gráfica; aguarda a execução do workflow portátil no GitHub.
+implementada e validada em imagem limpa e em snapshot de VM com sessão
+gráfica; o [workflow portátil também passou](https://github.com/eduardodaluz/deepWin/actions/runs/39179478620).
 O mantenedor decidiu que o primeiro Release 1.1.0 reunirá os três formatos,
 após concluir o aceite do portátil.
 O diagnóstico e os checklists abaixo registram o plano
@@ -282,7 +282,7 @@ ajustes funcionais mesmo que o diretório portátil seja movido ou removido.
 - [x] Reutilizar preferências e backups existentes, inclusive alternando formatos.
 - [x] Trocar a versão portátil e retornar à anterior quando o esquema for compatível;
       detectar claramente um estado de versão mais nova que não possa ser lido.
-- [ ] Publicar requisitos, instruções de extração, limpeza e checksum junto ao arquivo.
+- [x] Publicar requisitos, instruções de extração, limpeza e checksum junto ao arquivo.
 
 Evidências locais: 142 testes Python; build Docker com e sem reuso da imagem;
 verificação limpa sem SDK/compilador, incluindo menu via GLib e recusa de
@@ -292,8 +292,8 @@ ativação da colagem pelo portátil, movimentação/remoção da pasta e
 restauração funcional do clipboard pelo runtime. A compatibilidade de ida e
 volta foi exercitada em `1.1.0 → fixture 1.1.1 → 1.1.0`, preservando hashes
 dos backups e schema; a fixture é somente teste e não uma versão publicada.
-Requisitos e limpeza já acompanham o arquivo; a publicação em CI/Release
-ainda está pendente.
+Requisitos e limpeza acompanham o arquivo e seu checksum publicados em CI.
+A publicação do Release é a próxima entrega.
 
 ## Matriz de validação compartilhada
 
@@ -324,8 +324,8 @@ O mantenedor decidiu aguardar o portátil e publicar os três formatos juntos
 no primeiro Release 1.1.0, com checksums e requisitos de runtime. Há um
 [rascunho das notas](packaging/release-notes-1.1.0.md) preparado para revisão.
 A composição do portátil está definida: componentes do aplicativo com
-runtimes nativos do Deepin, sem bibliotecas Qt/DTK privadas. Falta concluir
-a CI portátil e confirmar a publicação do Release. A ampliação de plataformas
+runtimes nativos do Deepin, sem bibliotecas Qt/DTK privadas. A CI portátil
+passou; falta confirmar a publicação do Release. A ampliação de plataformas
 exige reavaliar a ABI do plugin da calculadora (referência testada: Qt 6.8
 do Deepin 25); o aceite atual não declara suporte genérico a outros desktops
 ou a versões anteriores do Qt.
