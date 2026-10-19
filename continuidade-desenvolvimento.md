@@ -54,10 +54,13 @@ Atualizado em **18/10/2026**, ao preparar a publicação autorizada do Release.
 - **Publicação autorizada pelo mantenedor** após o aceite dos três formatos:
   primeiro Release **1.1.0**, com `.deb`, `.uab` e `.tar.xz` juntos.
   [Notas finais](packaging/release-notes-1.1.0.md) e workflow de publicação
-  preparados. O push da tag `v1.1.0` dispara a validação dos artefatos
-  imutáveis dos três runs aprovados, criação de rascunho, upload e conferência
-  dos sete anexos antes de publicar. Não reutiliza credenciais do Docker.
-  Até a execução do workflow, não considerar a publicação concluída.
+  preparados. A tag `v1.1.0` foi enviada, preservada em `66d0b5c`; os três
+  instaladores passaram na conferência e foram enviados ao rascunho.
+  A consulta por tag não encontra rascunhos e interrompeu a primeira
+  execução antes de publicar. A correção consulta por ID e permite retomar
+  pelo push à `main` de alterações na automação, validando novamente todos
+  os anexos. Não reutiliza credenciais do Docker. Até conferir o Release
+  público, não considerar a publicação concluída.
 - Ambiente preservado: VM de aceite **desligada** em `~/deepwin-vm/`
   (quando no ar, SSH porta 2222, usuário `deepwin` com sudo NOPASSWD;
   para tocar a sessão gráfica por SSH, exportar `DISPLAY=:0`,
@@ -886,3 +889,18 @@ Validação local: seis testes da publicação aprovados, incluindo ZIP alterado
 checksum incorreto, nomes duplicados, origem divergente, artefato expirado e
 anexos remotos ausentes/adicionais/alterados; YAML e `git diff --check` válidos.
 Nenhum código da aplicação foi alterado.
+
+## Retomada do rascunho por ID — 18/10/2026
+
+A execução [39181194674](https://github.com/eduardodaluz/deepWin/actions/runs/39181194674)
+validou os três artefatos e criou o rascunho com anexos, mas a consulta
+`releases/tags/v1.1.0` retornou 404 para o rascunho. A publicação não ocorreu.
+A tag permanece no commit `66d0b5c`, sem reescrita.
+
+A correção lista releases com autenticação para localizar o rascunho, usa
+seu ID e permite retomá-lo somente se título, tag, notas e todos os anexos
+forem os esperados. Recusa release já publicado ou editado. O workflow
+também responde a mudanças na própria automação na `main`, com tag fixada
+por commit e conferência de que apenas documentação/automação diferem do
+código aceito. Oito testes passaram, incluindo regressão da consulta de
+rascunho e recusa de edição/publicação prévia. Não há sobrescrita de anexos.

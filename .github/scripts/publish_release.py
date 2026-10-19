@@ -10,6 +10,7 @@ import zipfile
 
 REPOSITORY = 'eduardodaluz/deepWin'
 TAG = 'v1.1.0'
+TAG_COMMIT = '66d0b5c857f13db8bf6cb86f552d2ac76ec806d3'
 SOURCE = '07fb017ab558f54b7282821d7ca305e8289f4b66'
 # IDs and ZIP digests recorded from the successful runs before publication.
 BUILDS = (
@@ -87,8 +88,8 @@ def prepare_asset(build, archive, output):
     return expected
 
 
-def validate_uploaded(release, assets):
-    require(release['tag_name'] == TAG and release['draft']
+def validate_uploaded(release, assets, draft=True):
+    require(release['tag_name'] == TAG and release['draft'] == draft
             and not release['prerelease'], 'Release is not the expected draft')
     uploaded = release['assets']
     require(len(uploaded) == len(assets)
@@ -101,21 +102,37 @@ def validate_uploaded(release, assets):
                 f'Uploaded asset verification failed: {item["name"]}')
 
 
+def find_release():
+    # The tag endpoint omits drafts; listing includes them for this repository token.
+    pages = json.loads(command('gh', 'api', '--paginate', '--slurp',
+                              f'repos/{REPOSITORY}/releases?per_page=100'))
+    matches = [item for page in pages for item in page if item['tag_name'] == TAG]
+    require(len(matches) <= 1, 'Multiple releases use the expected tag')
+    return matches[0] if matches else None
+
+
+def validate_draft(release, notes):
+    require(release['draft'] and not release['prerelease']
+            and release['tag_name'] == TAG and release['name'] == 'DeepWin 1.1.0'
+            and release['body'].strip() == notes.strip(),
+            'Existing release is not the expected unpublished draft')
+
+
 def main():
     require(os.environ.get('GITHUB_REPOSITORY') == REPOSITORY
-            and os.environ.get('GITHUB_REF') == f'refs/tags/{TAG}'
+            and os.environ.get('GITHUB_REF') in (f'refs/tags/{TAG}', 'refs/heads/main')
             and os.environ.get('GITHUB_EVENT_NAME') == 'push', 'Unexpected release trigger')
     require(Path('VERSION').read_text().strip() == '1.1.0', 'Version mismatch')
-    require(command('git', 'rev-parse', f'{TAG}^{{commit}}') == command('git', 'rev-parse', 'HEAD'),
-            'Checkout does not match release tag')
-    subprocess.run(['git', 'merge-base', '--is-ancestor', SOURCE, 'HEAD'], check=True)
+    require(command('git', 'rev-parse', f'{TAG}^{{commit}}') == TAG_COMMIT,
+            'Release tag changed after authorization')
+    subprocess.run(['git', 'merge-base', '--is-ancestor', TAG_COMMIT, 'HEAD'], check=True)
+    subprocess.run(['git', 'merge-base', '--is-ancestor', SOURCE, TAG_COMMIT], check=True)
     changed = set(command('git', 'diff', '--name-only', SOURCE, 'HEAD').splitlines())
     require(changed <= RELEASE_ONLY, f'Application changed after acceptance: {changed - RELEASE_ONLY}')
-    # Authenticated, paginated listing also sees drafts. Never replace an existing release.
-    releases = json.loads(command('gh', 'api', '--paginate', '--slurp',
-                                 f'repos/{REPOSITORY}/releases?per_page=100'))
-    require(all(release['tag_name'] != TAG for page in releases for release in page),
-            'Release already exists; inspect it before retrying')
+    notes = Path('packaging/release-notes-1.1.0.md').read_text()
+    existing = find_release()
+    if existing:
+        validate_draft(existing, notes)
 
     with tempfile.TemporaryDirectory(prefix='deepwin-release-') as temporary:
         directory = Path(temporary)
@@ -134,16 +151,23 @@ def main():
             print(f'Validated: {build["file"]}', flush=True)
         (output / 'SHA256SUMS').write_text(''.join(checksums))
         assets = {path.name: path for path in output.iterdir()}
-        subprocess.run(['gh', 'release', 'create', TAG, '--repo', REPOSITORY,
-                        '--verify-tag', '--draft', '--title', 'DeepWin 1.1.0',
-                        '--notes-file', 'packaging/release-notes-1.1.0.md',
-                        *map(str, sorted(assets.values()))], check=True)
-        release = api(f'releases/tags/{TAG}')
+        if not existing:
+            subprocess.run(['gh', 'release', 'create', TAG, '--repo', REPOSITORY,
+                            '--verify-tag', '--draft', '--title', 'DeepWin 1.1.0',
+                            '--notes-file', 'packaging/release-notes-1.1.0.md',
+                            *map(str, sorted(assets.values()))], check=True)
+            existing = find_release()
+            require(existing is not None, 'Created draft not found')
+        release = api(f'releases/{existing["id"]}')
+        validate_draft(release, notes)
         validate_uploaded(release, assets)
         # Publication is the final mutation, after checking all seven remote digests.
-        subprocess.run(['gh', 'release', 'edit', TAG, '--repo', REPOSITORY,
-                        '--draft=false', '--latest'], check=True)
-        published = api(f'releases/tags/{TAG}')
+        subprocess.run(['gh', 'api', '--method', 'PATCH',
+                        f'repos/{REPOSITORY}/releases/{release["id"]}',
+                        '-F', 'draft=false', '-f', 'make_latest=true'],
+                       stdout=subprocess.DEVNULL, check=True)
+        published = api(f'releases/{release["id"]}')
+        validate_uploaded(published, assets, draft=False)
         require(not published['draft'] and published['published_at'], 'Release was not published')
         summary = {'url': published['html_url'], 'tag': TAG, 'build_source': SOURCE,
                    'assets': {name: sha256(path) for name, path in sorted(assets.items())}}

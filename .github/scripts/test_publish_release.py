@@ -3,6 +3,7 @@ import hashlib
 import tempfile
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 import zipfile
 
 import publish_release as release
@@ -89,3 +90,19 @@ class ReleaseValidationTests(unittest.TestCase):
                         {'assets': [{**item, 'state': 'starter'}]}):
             with self.subTest(changes=changes), self.assertRaises(RuntimeError):
                 release.validate_uploaded({**draft, **changes}, assets)
+
+    def test_draft_lookup_uses_paginated_listing_instead_of_tag_endpoint(self):
+        import json
+        draft = dict(id=42, tag_name=release.TAG, draft=True)
+        with patch.object(release, 'command', return_value=json.dumps([[], [draft]])) as command:
+            self.assertEqual(release.find_release(), draft)
+        self.assertIn('--paginate', command.call_args.args)
+        self.assertTrue(command.call_args.args[-1].endswith('/releases?per_page=100'))
+
+    def test_draft_resume_refuses_published_or_edited_release(self):
+        draft = dict(tag_name=release.TAG, draft=True, prerelease=False,
+                     name='DeepWin 1.1.0', body='Approved notes\n')
+        release.validate_draft(draft, 'Approved notes\n')
+        for changes in ({'draft': False}, {'body': 'Manual changes'}, {'tag_name': 'v9.0.0'}):
+            with self.subTest(changes=changes), self.assertRaises(RuntimeError):
+                release.validate_draft({**draft, **changes}, 'Approved notes\n')
