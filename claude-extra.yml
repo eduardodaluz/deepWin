@@ -1,0 +1,67 @@
+---
+# Recurso "Claude extra" do DeepWin: um Claude Code por conta claude.ai.
+# Instala o gerenciador bin/claude-extra, lista os extras existentes e
+# pergunta o nome do proximo perfil. Cada perfil cria o atalho
+# claude_<nome> e usa as configuracoes isoladas em ~/.claude_<nome>.
+# Aplicar localmente: ansible-playbook -i localhost, -c local claude-extra.yml
+# Aplicar em outra maquina: ansible-playbook -i <host>, claude-extra.yml
+# Sem pergunta (automacao): ... -e claude_extra_nome=e2a
+- name: Configurar um Claude extra para o usuario
+  hosts: all
+  gather_facts: true
+
+  vars:
+    claude_extra_bin_dir: "{{ ansible_user_dir }}/.local/bin"
+    claude_extra_manager: "{{ claude_extra_bin_dir }}/claude-extra"
+
+  tasks:
+    - name: Garantir que o diretorio de binarios do usuario existe
+      ansible.builtin.file:
+        path: "{{ claude_extra_bin_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Instalar o gerenciador claude-extra em ~/.local/bin
+      ansible.builtin.copy:
+        src: bin/claude-extra
+        dest: "{{ claude_extra_manager }}"
+        mode: '0755'
+
+    - name: Descobrir os extras existentes
+      ansible.builtin.command:
+        argv:
+          - "{{ claude_extra_manager }}"
+          - list
+      register: claude_extra_existing
+      changed_when: false
+
+    - name: Mostrar os extras existentes
+      ansible.builtin.debug:
+        msg: "{{ claude_extra_existing.stdout_lines }}"
+      when: claude_extra_existing.stdout | length > 0
+
+    - name: Perguntar o nome do novo extra
+      ansible.builtin.pause:
+        prompt: "Nome do novo extra (ex.: e2a; vazio para nao criar)"
+      register: claude_extra_prompt
+      when: claude_extra_nome is not defined
+
+    - name: Definir o nome do extra
+      ansible.builtin.set_fact:
+        claude_extra_nome_final: >-
+          {{ claude_extra_nome | default(claude_extra_prompt.user_input | default('')) | trim }}
+
+    - name: Criar o perfil solicitado
+      ansible.builtin.command:
+        argv:
+          - "{{ claude_extra_manager }}"
+          - add
+          - "{{ claude_extra_nome_final }}"
+      when: claude_extra_nome_final | length > 0
+
+    - name: Resumo
+      ansible.builtin.debug:
+        msg: >-
+          Rode 'claude-{{ claude_extra_nome_final }}' e use '/login' dentro
+          da sessao para autenticar a conta desse perfil.
+      when: claude_extra_nome_final | length > 0

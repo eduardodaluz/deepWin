@@ -8,6 +8,7 @@
 #include <DSpinner>
 #include <DSwitchButton>
 #include <DTitlebar>
+#include <QAbstractItemView>
 #include <QCloseEvent>
 #include <QCompleter>
 #include <QButtonGroup>
@@ -123,6 +124,7 @@ public:
         rowsLayout->setSpacing(12);
         rowsLayout->addStretch();
         makeClaudeControls();
+        makeExtraControls();
         scroll->setWidget(content);
         layout->addWidget(scroll, 1);
 
@@ -168,7 +170,10 @@ public:
         });
         refreshTimer.setInterval(5000);
         connect(&refreshTimer, &QTimer::timeout, this, [this] {
-            if (process.state() == QProcess::NotRunning) run({"status"});
+            if (process.state() == QProcess::NotRunning) {
+                quietRefresh = true;
+                run({"status"});
+            }
         });
         refreshTimer.start();
         QTimer::singleShot(0, this, [this] { run({"status"}); });
@@ -187,7 +192,8 @@ protected:
 
 private:
     QString backend, screenshotPath;
-    bool smokeTest, busyAction = false, busy = false, timedOut = false, firstResult = true;
+    bool smokeTest, busyAction = false, busy = false, quietRefresh = false, timedOut = false,
+        firstResult = true;
     QProcess process;
     QTimer refreshTimer, deadline;
     QJsonObject model;
@@ -200,18 +206,30 @@ private:
     DLabel *claudeStatus, *claudeNote;
     DComboBox *claudeChoice;
     DPushButton *claudeApply, *claudeFetch, *claudeUndo;
+    DFrame *extraFrame;
+    DLabel *extraStatus, *extraNote;
+    DComboBox *extraChoice;
+    DPushButton *extraCreate, *extraRemove;
+    QString extraSignature;
     bool catalogRequested = false;
     QString claudeSignature;
     DSpinner *spinner;
 
     void run(const QStringList &arguments) {
-        if (process.state() != QProcess::NotRunning) return;
+        if (process.state() != QProcess::NotRunning) {
+            if (!busy) message->setText("Uma consulta ao painel está em andamento; tente novamente em instantes.");
+            return;
+        }
         busyAction = arguments[0] != "status" && arguments[0] != "claude-list";
+        // A atualização periódica roda em segundo plano sem travar a
+        // interface: desabilitar controles fecharia combos abertas.
+        const bool quiet = quietRefresh;
+        quietRefresh = false;
         timedOut = false;
         if (busyAction) message->setText(arguments[0] == "claude-select" ?
             "Preparando a versão do Claude… Aguarde a conclusão do download e da instalação." : "Aplicando alteração…");
         else if (arguments[0] == "claude-list") message->setText("Consultando versões disponíveis…");
-        setBusy(true);
+        if (!quiet) setBusy(true);
         process.start("/usr/bin/python3", QStringList{backend} + arguments);
         deadline.start(arguments[0] == "claude-select" ? 300000 : 25000);
     }
@@ -229,6 +247,8 @@ private:
         claudeApply->setEnabled(selectable);
         claudeFetch->setEnabled(!value);
         claudeUndo->setEnabled(!value && claude["can_restore"].toBool());
+        extraCreate->setEnabled(!value);
+        extraRemove->setEnabled(!value);
     }
 
     void makeClaudeControls() {
@@ -284,6 +304,61 @@ private:
         });
     }
 
+    void makeExtraControls() {
+        extraFrame = new DFrame;
+        extraFrame->setFrameRounded(true);
+        auto *layout = new QVBoxLayout(extraFrame);
+        layout->setContentsMargins(18, 16, 18, 16);
+        auto *title = new DLabel("Claude extra · várias contas claude.ai");
+        QFont font = title->font(); font.setWeight(QFont::DemiBold); title->setFont(font);
+        layout->addWidget(title);
+        extraStatus = new DLabel("Consultando perfis…");
+        extraStatus->setWordWrap(true);
+        layout->addWidget(extraStatus);
+        extraNote = new DLabel;
+        extraNote->setWordWrap(true);
+        extraNote->setForegroundRole(Dtk::Gui::DPalette::TextTips);
+        layout->addWidget(extraNote);
+        auto *row = new QHBoxLayout;
+        extraChoice = new DComboBox;
+        extraChoice->setObjectName("claude-extra-name");
+        extraChoice->setAccessibleName("Nome do extra");
+        extraChoice->setEditable(true);
+        extraChoice->setInsertPolicy(QComboBox::NoInsert);
+        extraChoice->setMinimumWidth(160);
+        row->addWidget(extraChoice, 1);
+        extraCreate = new DPushButton("Criar perfil");
+        extraCreate->setObjectName("claude-extra-create");
+        row->addWidget(extraCreate);
+        extraRemove = new DPushButton("Remover atalho");
+        extraRemove->setObjectName("claude-extra-remove");
+        row->addWidget(extraRemove);
+        layout->addLayout(row);
+        rowsLayout->insertWidget(rowsLayout->indexOf(claudeFrame) + 1, extraFrame);
+        connect(extraCreate, &DPushButton::clicked, this, [this] {
+            const auto name = extraChoice->currentText().trimmed();
+            if (name.isEmpty()) {
+                message->setText("Digite o nome do novo extra, por exemplo trabalho.");
+                return;
+            }
+            run({"claude-extra-add", name});
+        });
+        connect(extraRemove, &DPushButton::clicked, this, [this] {
+            const auto name = extraChoice->currentText().trimmed();
+            if (extraChoice->findText(name) < 0) {
+                message->setText("Selecione um extra existente na lista para remover o atalho.");
+                return;
+            }
+            DDialog dialog("Remover o atalho claude_" + name + "?",
+                "O atalho sai do PATH. O diretório ~/.claude_" + name +
+                " é mantido com o login e o histórico do perfil.", this);
+            dialog.setIcon(QIcon::fromTheme("preferences-system"));
+            dialog.addButton("Cancelar");
+            dialog.addButton("Remover", true, DDialog::ButtonRecommend);
+            if (dialog.exec() == 1) run({"claude-extra-remove", name});
+        });
+    }
+
     void renderClaude() {
         const auto claude = model["claude"].toObject();
         const auto mode = claude["mode"].toString();
@@ -292,7 +367,8 @@ private:
         const auto desired = mode == "pinned" ? version : mode;
         const QString signature = mode + ":" + version + ":" + stable + ":" +
             QString::fromUtf8(QJsonDocument(claude["versions"].toArray()).toJson(QJsonDocument::Compact));
-        if (signature != claudeSignature) {
+        if (signature != claudeSignature && !claudeChoice->view()->isVisible()) {
+            // Recriar os itens fecharia a lista aberta; o ciclo seguinte aplica.
             claudeSignature = signature;
             // Preservar a escolha e o texto digitado durante a atualização periódica.
             const auto pendingText = claudeChoice->currentText();
@@ -325,6 +401,34 @@ private:
         if (claude["override"].toBool()) note = "ZCLAUDE_CLAUDE_BIN está definido no ambiente. Remova essa substituição para selecionar pela interface.";
         if (!claude["update_error"].toString().isEmpty()) note += "\nA última atualização falhou; a versão instalada foi mantida.";
         claudeNote->setText(note);
+    }
+
+    void renderExtras() {
+        const auto extras = model["claude_extras"].toArray();
+        QStringList lines;
+        QString signature;
+        for (const auto &value : extras) {
+            const auto item = value.toObject();
+            const auto name = item["name"].toString();
+            const auto ready = item["ready"].toBool();
+            const auto loggedIn = item["logged_in"].toBool();
+            signature += name + QString(ready ? ":1" : ":0") + QString(loggedIn ? "1;" : "0;");
+            QString state = ready ? "atalho pronto" : "sem atalho";
+            state += loggedIn ? "; com login" : "; login pendente";
+            lines << QString("claude_%1 — %2").arg(name, state);
+        }
+        if (lines.isEmpty()) lines << "Nenhum extra ainda; escolha um nome abaixo para criar o primeiro.";
+        if (signature != extraSignature && !extraChoice->view()->isVisible()) {
+            const QSignalBlocker blocker(extraChoice);
+            const auto current = extraChoice->currentText();
+            extraChoice->clear();
+            for (const auto &value : extras) extraChoice->addItem(value.toObject()["name"].toString());
+            if (extraChoice->findText(current) >= 0) extraChoice->setCurrentIndex(extraChoice->findText(current));
+            else if (!current.isEmpty()) extraChoice->setEditText(current);
+            extraSignature = signature;
+        }
+        extraStatus->setText(lines.join('\n'));
+        extraNote->setText("Cada perfil usa o próprio ~/.claude_<nome>; o claude principal não é alterado. Rode /login dentro do perfil na primeira execução.");
     }
 
     void makeRow(const QJsonObject &feature) {
@@ -388,6 +492,7 @@ private:
         restoreButton->setEnabled(!busy && restorable > 0);
         updated->setText("Atualizado às " + QDateTime::currentDateTime().toString("HH:mm:ss"));
         renderClaude();
+        renderExtras();
         filterRows();
     }
 
@@ -396,6 +501,7 @@ private:
         const QStringList titles = {"Seus recursos", "Produtividade", "Aparência", "Ferramentas"};
         pageTitle->setText(titles.value(selected, titles[0]));
         claudeFrame->setVisible(selected == 0 || selected == 3);
+        extraFrame->setVisible(selected == 0 || selected == 3);
         if (selected == 3 && !smokeTest && !catalogRequested && !busy) {
             catalogRequested = true;
             QTimer::singleShot(0, this, [this] { run({"claude-list"}); });

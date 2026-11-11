@@ -9,6 +9,7 @@ import fcntl
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import shutil
 import subprocess
@@ -382,7 +383,9 @@ class Manager:
         self.state_dir = Path(state_dir or Path(os.environ.get(
             'XDG_STATE_HOME', str(self.home / '.local/state'))) / APP_ID)
         self.source = Path(source or Path(__file__).resolve().parents[1] / 'bin/zclaude')
+        self.extra_source = self.source.with_name('claude-extra')
         self.wrapper = self.home / '.local/bin/zclaude'
+        self.extra_bin = self.home / '.local/bin'
         self.disabled = self.state_dir / 'disabled/zclaude'
         self.state_file = self.state_dir / 'originals.json'
         self.native = native if native is not None else Native()
@@ -581,6 +584,43 @@ class Manager:
         else:
             raise ConfigError('Recurso desconhecido.')
 
+    def extra_profiles(self):
+        """Perfis "claude extra": uma conta claude.ai por ~/.claude_<nome>."""
+        names = set()
+        if self.extra_bin.is_dir():
+            for item in self.extra_bin.glob('claude_*'):
+                if item.is_file() and os.access(item, os.X_OK):
+                    names.add(item.name[len('claude_'):])
+        for item in self.home.glob('.claude_*'):
+            if item.is_dir() and item.name != '.claude-glm':
+                names.add(item.name[len('.claude_'):])
+        profiles = []
+        for name in sorted(n for n in names if n):
+            config = self.home / ('.claude_' + name)
+            wrapper = self.extra_bin / ('claude_' + name)
+            profiles.append({
+                'name': name,
+                'shortcut': str(wrapper),
+                'ready': wrapper.is_file() and os.access(wrapper, os.X_OK),
+                'config': str(config),
+                'logged_in': (config / '.credentials.json').is_file(),
+            })
+        return profiles
+
+    def extra_change(self, action, name):
+        """Cria ou remove um perfil extra pelo gerenciador bin/claude-extra."""
+        if not re.fullmatch(r'[a-z0-9][a-z0-9_-]*', name or ''):
+            raise ConfigError("Use letras minúsculas, números, '_' ou '-' no nome do extra.")
+        if not self.extra_source.is_file():
+            raise ConfigError('O gerenciador claude-extra não está disponível nesta instalação.')
+        result = subprocess.run([str(self.extra_source), action, name],
+                                capture_output=True, text=True, timeout=30,
+                                env=dict(os.environ, HOME=str(self.home)))
+        text = (result.stdout + result.stderr).strip()
+        if result.returncode:
+            raise ConfigError(text or 'Não foi possível alterar o extra.')
+        return text or 'Extra atualizado.'
+
     def change(self, feature, enabled):
         if feature not in {row[0] for row in FEATURES}:
             raise ConfigError('Recurso desconhecido.')
@@ -700,7 +740,7 @@ class Manager:
             installation['note'] = 'Uma instalação local também existe. Use /usr/bin/deepwin para abrir o pacote.'
         return {'features': features, 'installation': installation, 'restore_count': len(originals),
                 'restore_titles': [row[2] for row in FEATURES if row[0] in originals],
-                'claude': claude}
+                'claude': claude, 'claude_extras': self.extra_profiles()}
 
 
 def main():
@@ -712,6 +752,10 @@ def main():
     select = sub.add_parser('claude-select')
     select.add_argument('version')
     sub.add_parser('claude-restore')
+    extra_add = sub.add_parser('claude-extra-add')
+    extra_add.add_argument('name')
+    extra_remove = sub.add_parser('claude-extra-remove')
+    extra_remove.add_argument('name')
     change = sub.add_parser('set')
     change.add_argument('feature', choices=[row[0] for row in FEATURES])
     change.add_argument('enabled', choices=('on', 'off'))
@@ -747,6 +791,10 @@ def main():
         elif args.command == 'restore':
             manager.restore(args.feature)
             message = 'Configurações anteriores restauradas.'
+        elif args.command == 'claude-extra-add':
+            message = manager.extra_change('add', args.name)
+        elif args.command == 'claude-extra-remove':
+            message = manager.extra_change('remove', args.name)
         result = manager.status()
         result.update(ok=True, message=message)
         print(json.dumps(result, ensure_ascii=False))

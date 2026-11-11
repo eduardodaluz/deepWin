@@ -74,6 +74,54 @@ class ManagerTests(unittest.TestCase):
         return backend.Manager(native=self.native, home=self.home,
                                state_dir=self.state, source=self.source)
 
+    def test_extra_profiles_report_shortcut_and_login_state(self):
+        bin_dir = self.home / '.local/bin'
+        bin_dir.mkdir(parents=True)
+        wrapper = bin_dir / 'claude_e2a'
+        wrapper.write_text('#!/bin/bash\nexec claude "$@"\n')
+        wrapper.chmod(0o755)
+        config = self.home / '.claude_e2a'
+        config.mkdir()
+        (config / '.credentials.json').write_text('{}')
+        (self.home / '.claude-glm').mkdir()  # diretório do zclaude, fora do inventário
+        profiles = self.manager.extra_profiles()
+        self.assertEqual([row['name'] for row in profiles], ['e2a'])
+        self.assertTrue(profiles[0]['ready'])
+        self.assertTrue(profiles[0]['logged_in'])
+        self.assertEqual(profiles[0]['config'], str(config))
+        self.assertEqual(profiles[0]['shortcut'], str(wrapper))
+
+    def test_extra_change_creates_and_removes_via_manager_script(self):
+        script = self.home / 'claude-extra'
+        script.write_text(
+            '#!/bin/bash\n'
+            'case "$1" in\n'
+            '  add)\n'
+            '    mkdir -p "$HOME/.local/bin" "$HOME/.claude_$2"\n'
+            '    printf \'#!/bin/bash\\nexec claude "$@"\\n\' > "$HOME/.local/bin/claude_$2"\n'
+            '    chmod 0755 "$HOME/.local/bin/claude_$2"\n'
+            '    printf \'Perfil "%s" pronto.\\n\' "$2"\n'
+            '    ;;\n'
+            '  remove)\n'
+            '    rm -f "$HOME/.local/bin/claude_$2"\n'
+            '    printf \'Atalho removido.\\n\'\n'
+            '    ;;\n'
+            'esac\n')
+        script.chmod(0o755)
+        message = self.manager.extra_change('add', 'e2a')
+        self.assertIn('pronto', message)
+        profiles = {row['name']: row for row in self.manager.extra_profiles()}
+        self.assertTrue(profiles['e2a']['ready'])
+        self.manager.extra_change('remove', 'e2a')
+        profiles = {row['name']: row for row in self.manager.extra_profiles()}
+        self.assertFalse(profiles['e2a']['ready'])
+        self.assertTrue((self.home / '.claude_e2a').is_dir())
+
+    def test_extra_change_rejects_invalid_names(self):
+        with self.assertRaises(backend.ConfigError) as raised:
+            self.manager.extra_change('add', 'Nome Ruim!')
+        self.assertIn('minúsculas', str(raised.exception))
+
     def test_status_reports_real_resources_without_writing_files(self):
         result = self.manager.status()
         self.assertEqual(len(result['features']), 11)

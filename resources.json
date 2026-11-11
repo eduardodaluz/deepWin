@@ -11,6 +11,7 @@
     "gui/resources.py",
     "gui/user_services.py",
     "bin/zclaude",
+    "bin/claude-extra",
     "bin/deepwin-calculator",
     "bin/deepin-clipboard-autopaste",
     "bin/refresh-deepin-wallpaper",

@@ -22,7 +22,7 @@ set(DEEPWIN_RESOURCE_DIR "${CMAKE_INSTALL_LIBDIR}/deepwin" CACHE STRING "Diretó
 install(TARGETS deepwin-ui RUNTIME DESTINATION "${DEEPWIN_RESOURCE_DIR}")
 install(TARGETS deepwin-calculator LIBRARY DESTINATION "${DEEPWIN_RESOURCE_DIR}/qt6/plugins/generic")
 install(DIRECTORY gui/ DESTINATION "${DEEPWIN_RESOURCE_DIR}/gui" FILES_MATCHING PATTERN "*.py")
-install(PROGRAMS bin/zclaude bin/deepwin-calculator bin/deepin-clipboard-autopaste
+install(PROGRAMS bin/zclaude bin/claude-extra bin/deepwin-calculator bin/deepin-clipboard-autopaste
     bin/refresh-deepin-wallpaper bin/deepwin-restore DESTINATION "${DEEPWIN_RESOURCE_DIR}/bin")
 install(DIRECTORY packaging/systemd/ DESTINATION "${DEEPWIN_RESOURCE_DIR}/systemd")
 install(FILES VERSION LICENSE resources.json DESTINATION "${DEEPWIN_RESOURCE_DIR}")

@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+# Gerencia perfis "claude extra": um Claude Code por conta claude.ai,
+# cada perfil com atalho claude_<nome> e configuracoes isoladas em
+# ~/.claude_<nome> (CLAUDE_CONFIG_DIR), sem alterar o claude principal.
+# Uso:
+#   claude-extra                 # lista os extras e pede o nome de um novo
+#   claude-extra list            # lista os extras existentes
+#   claude-extra add <nome>      # cria o perfil <nome>
+#   claude-extra remove <nome>   # remove o atalho do perfil <nome>
+#   claude-extra run <nome> [args]  # executa claude com o perfil <nome>
+#   claude-extra <nome> [args]      # forma curta de run
+set -euo pipefail
+
+bin_dir="${CLAUDE_EXTRA_BIN_DIR:-$HOME/.local/bin}"
+
+die() {
+  printf 'claude-extra: %s\n' "$1" >&2
+  exit 1
+}
+
+usage() {
+  printf 'Uso: claude-extra [comando]\n\n'
+  printf 'Comandos:\n'
+  printf '  (sem comando)             lista os extras e pede o nome de um novo\n'
+  printf '  list                      lista os extras existentes\n'
+  printf '  add <nome>                cria o atalho claude_<nome> e ~/.claude_<nome>\n'
+  printf '  remove <nome>             remove o atalho claude_<nome>\n'
+  printf '  run <nome> [args]         executa claude com o perfil <nome>\n'
+  printf '  <nome> [args]             forma curta de run\n'
+}
+
+valid_name() {
+  [[ $1 =~ ^[a-z0-9][a-z0-9_-]*$ ]]
+}
+
+wrapper_path() {
+  printf '%s/claude_%s' "$bin_dir" "$1"
+}
+
+config_path() {
+  printf '%s/.claude_%s' "$HOME" "$1"
+}
+
+known_dirs() {
+  find "$HOME" -maxdepth 1 -name '.claude_*' ! -name '.claude-glm' -type d -print 2>/dev/null |
+    sed "s|^$HOME/\.claude_||" || true
+}
+
+known_wrappers() {
+  find "$bin_dir" -maxdepth 1 -name 'claude_*' -type f -perm -u+x -print 2>/dev/null |
+    sed "s|^$bin_dir/claude_||" || true
+}
+
+extras() {
+  {
+    known_dirs
+    known_wrappers
+  } | sort -u
+}
+
+cmd_list() {
+  local nome found=0 w c estado
+  printf 'Extras de Claude (cada perfil usa um CLAUDE_CONFIG_DIR proprio):\n'
+  while IFS= read -r nome; do
+    [ -n "$nome" ] || continue
+    found=1
+    w=$(wrapper_path "$nome")
+    c=$(config_path "$nome")
+    if [ -x "$w" ]; then
+      estado='atalho pronto'
+    else
+      estado='sem atalho'
+    fi
+    if [ -f "$c/.credentials.json" ]; then
+      estado="$estado; com login"
+    else
+      estado="$estado; login pendente"
+    fi
+    printf '  %-16s %s\n' "$nome" "$estado"
+    printf '  %-16s config: %s\n' '' "$c"
+  done < <(extras)
+  if [ "$found" -eq 0 ]; then
+    printf '  (nenhum extra ainda)\n'
+  fi
+}
+
+cmd_add() {
+  local nome=${1:-}
+  valid_name "$nome" || die "nome invalido: '$nome'. Use minusculas, numeros, '_' ou '-' (ex.: e2a, trabalho-1)."
+  local w c
+  w=$(wrapper_path "$nome")
+  c=$(config_path "$nome")
+  if [ -e "$w" ] && ! grep -q 'CLAUDE_CONFIG_DIR' "$w" 2>/dev/null; then
+    die "$w ja existe e nao e um atalho claude extra; escolha outro nome ou remova-o."
+  fi
+  mkdir -p "$bin_dir"
+  {
+    printf '#!/usr/bin/env bash\n'
+    printf '# Atalho do Claude Code para o perfil extra "%s", isolado em\n' "$nome"
+    printf '# %s. Rode /login dentro da sessao na primeira execucao.\n' "$c"
+    printf 'set -euo pipefail\n\n'
+    printf 'export CLAUDE_CONFIG_DIR="%s"\n' "$c"
+    printf 'exec claude "$@"\n'
+  } >"$w"
+  chmod 0755 "$w"
+  mkdir -p -m 0700 "$c"
+  printf 'Perfil "%s" pronto.\n' "$nome"
+  printf '  Atalho: %s\n' "$w"
+  printf '  Config: %s\n' "$c"
+  if [ -f "$c/.credentials.json" ]; then
+    printf 'Login existente preservado.\n'
+  else
+    printf 'Proximo passo: execute %s e rode /login.\n' "$w"
+  fi
+}
+
+cmd_remove() {
+  local nome=${1:-}
+  valid_name "$nome" || die "nome invalido: '$nome'."
+  local w c
+  w=$(wrapper_path "$nome")
+  c=$(config_path "$nome")
+  [ -e "$w" ] || die "atalho $w nao existe."
+  rm -f -- "$w"
+  printf 'Atalho %s removido.\n' "$w"
+  if [ -d "$c" ]; then
+    printf 'O diretorio %s foi mantido (login, historico e configuracoes).\n' "$c"
+    printf 'Remova-o manualmente se quiser descartar esse perfil por completo.\n'
+  fi
+}
+
+cmd_run() {
+  local nome=${1:-}
+  valid_name "$nome" || die "nome invalido: '$nome'."
+  local c
+  c=$(config_path "$nome")
+  [ -d "$c" ] || die "perfil '$nome' nao existe; crie com: claude-extra add $nome"
+  export CLAUDE_CONFIG_DIR="$c"
+  shift
+  exec claude "$@"
+}
+
+cmd_interactive() {
+  cmd_list
+  local nome
+  printf '\nNome do novo extra (vazio para sair): '
+  IFS= read -r nome
+  [ -n "$nome" ] || exit 0
+  cmd_add "$nome"
+}
+
+cmd=${1:-}
+case $cmd in
+  '') cmd_interactive ;;
+  list | --list) cmd_list ;;
+  add) shift; cmd_add "${1:-}" ;;
+  remove) shift; cmd_remove "${1:-}" ;;
+  run) shift; cmd_run "$@" ;;
+  -h | --help | help) usage ;;
+  *) cmd_run "$@" ;;
+esac

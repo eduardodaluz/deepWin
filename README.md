@@ -204,8 +204,10 @@ sessão. Unidades e arquivos personalizados existentes são preservados:
 | Atalhos | Usar uma sessão com KGlobalAccel e as APIs de atalhos do Deepin; `deepin-shortcuts.yml` aplica as combinações sugeridas. |
 | Vírgula decimal | Calculadora Deepin com Qt 6 (Linglong ou launcher nativo compatível); instalado com a GUI, controle em Produtividade. |
 | Miniaturas ao clicar | Requer o dock do `dde-shell` com QML compatível. O controle fica em Aparência e é instalado com a GUI. |
+| Dock por área de trabalho | Sessão X11 e dock do `dde-shell` com QML compatível. O controle fica em Aparência e é instalado com a GUI. |
 | Download agendado de paisagens | O painel prepara serviço e timer de uma hora por usuário. Timers existentes são preservados; `deepin-wallpaper.yml` continua fazendo uma troca única. |
 | `zclaude` | Instalar o Claude Code e configurar a chave da Z.AI para usar o wrapper; `zclaude.yml` instala o comando. |
+| Claude extra | Contas claude.ai adicionais em perfis isolados; `claude-extra.yml` instala o gerenciador, lista os extras existentes e cria novos perfis. |
 
 O painel identifica quando a colagem está em modo de simulação. Habilitar esse
 recurso pela GUI não muda o modo de execução; use o playbook para ativar a
@@ -630,6 +632,37 @@ chave da Z.AI.
 
 O guia [de diagnóstico do erro 1210](fix-glm-claudecode-erro1210.md) descreve um
 contorno específico; instalar uma versão antiga não é requisito geral do projeto.
+
+## Claude extra (várias contas claude.ai)
+
+O recurso "Claude extra" cria um Claude Code por conta claude.ai sem tocar no
+`claude` principal. O playbook `claude-extra.yml` instala o gerenciador
+`bin/claude-extra` em `~/.local/bin`, lista os extras existentes na máquina e
+pergunta o nome do próximo perfil. Cada perfil fica em `~/.claude_<nome>`
+(`CLAUDE_CONFIG_DIR` próprio) com o atalho `claude_<nome>`; login, histórico e
+plugins ficam separados por conta, e os extras podem ser usados ao mesmo tempo
+que o `claude` principal.
+
+```bash
+ansible-playbook -i localhost, -c local claude-extra.yml   # pergunta o nome
+claude-extra list            # lista os extras existentes
+claude-extra add trabalho    # cria o perfil "trabalho" sem perguntar
+claude-trabalho              # abre o perfil; rode /login na primeira vez
+```
+
+Para automatizar sem pergunta: `ansible-playbook -i localhost, -c local
+claude-extra.yml -e claude_extra_nome=trabalho`. O nome aceita letras
+minúsculas, números, `_` e `-`. `claude-extra remove <nome>` remove o atalho
+e mantém `~/.claude_<nome>` (login e histórico) até que você remova o
+diretório manualmente.
+
+Na GUI do DeepWin, o quadro **Claude extra · várias contas claude.ai**
+(visível em Visão geral e em Ferramentas, abaixo da seleção de versão do
+zclaude) lista os perfis com o estado do atalho e do login, cria novos
+perfis pelo nome digitado e remove atalhos com confirmação. A atualização
+periódica do painel roda em segundo plano e não fecha combos abertas.
+
+Requisitos: `claude` instalado e `~/.local/bin` no `PATH`.
 
 ## Licença
 
