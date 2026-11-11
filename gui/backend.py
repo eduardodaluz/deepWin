@@ -99,6 +99,8 @@ FEATURES = [
     ('screenshot', 'Atalhos', 'Capturar uma área da tela', 'Win + Shift + S · Recorte e edição do Deepin.'),
     ('dock_preview', 'Aparência', 'Miniaturas ao clicar em grupos de janelas',
      'Clique em um ícone com duas ou mais janelas para escolher uma miniatura. Recarrega a barra de tarefas.'),
+    ('dock_workspace', 'Aparência', 'Dock separado por área de trabalho',
+     'Aplicativos não fixados aparecem só no dock da área em que estão abertos. Recarrega a barra de tarefas.'),
     ('wallpaper', 'Aparência', 'Baixar novas paisagens automaticamente',
      'Busca imagens no Unsplash conforme o timer configurado. Ao desativar, mantém a imagem atual.'),
     ('zclaude', 'Ferramentas', 'Disponibilizar o comando zclaude',
@@ -436,6 +438,8 @@ class Manager:
             return self.calculator_decimal.capture()
         if feature == 'dock_preview':
             return self.dock_preview.capture()
+        if feature == 'dock_workspace':
+            return self.dock_preview.capture('workspace')
         if feature in SERVICES:
             try:
                 value = self.native.service(SERVICES[feature])
@@ -471,6 +475,12 @@ class Manager:
                 self.apply(feature, True)
             else:
                 self.dock_preview.configure(False)
+            return
+        if feature == 'dock_workspace':
+            if value['enabled']:
+                self.apply(feature, True)
+            else:
+                self.dock_preview.configure(False, 'workspace')
             return
         if feature in SERVICES:
             if value.get('absent'):
@@ -514,6 +524,12 @@ class Manager:
                 runtime = self.resources.ensure()
                 self.dock_preview.helper = runtime / 'gui/dock_preview.py'
             self.dock_preview.configure(enabled)
+            return
+        if feature == 'dock_workspace':
+            if enabled:
+                runtime = self.resources.ensure()
+                self.dock_preview.helper = runtime / 'gui/dock_preview.py'
+            self.dock_preview.configure(enabled, 'workspace')
             return
         if feature in SERVICES:
             if enabled:
@@ -642,6 +658,10 @@ class Manager:
                 values = self.dock_preview.status()
                 item.update(values)
                 item['status'] = 'Prévia ao clicar ativada' if values['enabled'] else 'Comportamento padrão do dock'
+            elif feature == 'dock_workspace':
+                values = self.dock_preview.status('workspace')
+                item.update(values)
+                item['status'] = 'Dock filtrado pela área atual' if values['enabled'] else 'Comportamento padrão do dock'
             elif feature in SHORTCUTS:
                 action, key = SHORTCUTS[feature]
                 item['enabled'] = key in self.native.shortcut(action)

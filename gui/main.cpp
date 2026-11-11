@@ -428,7 +428,7 @@ private:
             firstResult = false;
             if (smokeTest || !screenshotPath.isEmpty()) {
                 QTimer::singleShot(600, this, [this, ok] {
-                    bool valid = ok && rows.size() == 10 &&
+                    bool valid = ok && rows.size() == 11 &&
                         claudeChoice->findData("stable") >= 0 && claudeChoice->findData("system") >= 0;
                     if (QCoreApplication::arguments().contains("--check-integrations"))
                         for (const auto &row : rows) valid = valid && row.available;

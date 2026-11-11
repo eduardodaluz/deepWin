@@ -76,7 +76,7 @@ class ManagerTests(unittest.TestCase):
 
     def test_status_reports_real_resources_without_writing_files(self):
         result = self.manager.status()
-        self.assertEqual(len(result['features']), 10)
+        self.assertEqual(len(result['features']), 11)
         self.assertFalse(self.state.exists())
         self.assertFalse(self.manager.feature_status('zclaude')['enabled'])
 

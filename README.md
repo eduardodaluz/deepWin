@@ -16,6 +16,7 @@ Ele permite habilitar e desabilitar dez recursos:
 - Quatro combinações para áreas de trabalho e monitores.
 - Captura de área com Win+Shift+S.
 - Miniaturas ao clicar em um grupo de janelas na barra de tarefas.
+- Dock separado por área de trabalho para aplicativos não fixados.
 - Download automático de paisagens.
 - Disponibilidade do comando `zclaude`.
 
@@ -501,6 +502,23 @@ PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 tests/verify_dock_preview.py
 
 O teste recarrega a barra, verifica o clique e a escolha de uma miniatura e
 restaura o estado anterior automaticamente.
+
+## Dock separado por área de trabalho
+
+Em **Aparência → Dock separado por área de trabalho**, aplicativos não fixados
+aparecem somente no dock da área em que têm janelas abertas. Um aplicativo
+aberto na área 1 some do dock ao mudar para a área 2 e volta ao retornar.
+Aplicativos fixados continuam em todas as áreas, com o indicador de execução
+nativo. Janelas visíveis em todas as áreas e aplicativos pedindo atenção também
+continuam aparecendo.
+
+O recurso compartilha a cópia personalizada do componente e o drop-in usados
+pelas miniaturas; cada switch pode ser ativado ou desativado independentemente.
+O serviço de usuário `deepwin-dock-workspaces.service` acompanha as áreas pelo
+X11 e publica o estado em
+`$XDG_RUNTIME_DIR/devedu.deepin-configs/dock-workspaces.json`. Se o serviço
+parar, o arquivo é removido e o dock volta a exibir todos os aplicativos.
+Funciona apenas em sessões X11.
 
 ## Papel de parede de paisagem
 

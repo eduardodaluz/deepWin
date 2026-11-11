@@ -53,6 +53,34 @@ a janela ativa. Depois seleciona uma miniatura e restaura o estado original em
 um bloco `finally`. Esse teste exige sessão X11 desbloqueada e DeepWin instalado.
 A compatibilidade visual em Wayland precisa de validação específica.
 
+## Dock separado por área de trabalho
+
+O `taskmanager` do `dde-shell` 2.0.52 não lê `_NET_WM_DESKTOP` nem
+`_NET_CURRENT_DESKTOP` e não tem configuração para filtrar por área. Marcar
+janelas de outras áreas com `_NET_WM_STATE_SKIP_TASKBAR` também não funciona:
+`shouldSkip` só é avaliado quando a janela entra no modelo, e a mudança de
+estado notifica apenas os papéis de atividade e atenção.
+
+A integração tem duas partes:
+
+- `dock_preview.py track`, executado pelo serviço
+  `deepwin-dock-workspaces.service`, observa `PropertyNotify` na raiz e nas
+  janelas clientes e grava a área atual e a área de cada janela em
+  `$XDG_RUNTIME_DIR/devedu.deepin-configs/dock-workspaces.json`.
+- A cópia gerada de `TaskManager.qml` adiciona um `DelegateModelGroup` usado
+  como `filterOnGroup`. Um `Timer` lê o JSON por `XMLHttpRequest` (habilitado
+  por `QML_XHR_ALLOW_FILE_READ=1` no drop-in) e recalcula o grupo quando o
+  estado, os itens ou os dados do modelo mudam. As posições de `indexAt()` no
+  arrastar e soltar são convertidas para o grupo completo antes de mover itens.
+
+O papel `docked` do modelo global não reflete a fixação, e `IsDocked` não é
+invocável pelo QML nesta versão. A lista `dockedElements` é lida por
+`D.Config` do DTK, a mesma configuração usada pelo dock.
+
+Sem estado publicado, ou com JSON inválido, o filtro mostra todos os itens. O
+marcador do pacote gerado passou ao formato 2, que registra os ajustes ativos;
+o formato 1 continua reconhecido como prévia apenas.
+
 ## Código de referência
 
 - [Descoberta e precedência de pacotes](https://github.com/linuxdeepin/dde-shell/blob/2.0.52/frame/pluginloader.cpp)
